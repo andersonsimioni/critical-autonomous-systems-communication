@@ -51,7 +51,7 @@ qemu-system-riscv64 -machine virt -nographic -kernel Image -initrd initramfs.cpi
 
 qemu-system-riscv64 -machine virt -nographic -kernel Image -initrd initramfs.cpio -append "root=/dev/ram rw" -netdev socket,id=vlan0,mcast=230.0.0.1:1234 -device virtio-net,id=eth0,netdev=vlan0,mac=52:54:00:12:34:01
 
-
+ qemu-system-riscv64 -machine virt -nographic -kernel Image -initrd initramfs.cpio --append "root=/dev/ram"
 
 
 
