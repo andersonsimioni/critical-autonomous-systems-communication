@@ -15,11 +15,12 @@ SRC = $(wildcard src/*.cpp)
 OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
-all: clean x86 riscv clean_build make_cpio run_vms
+all: clean x86 riscv clean_build cpio run_vms
 
-make_cpio:
+cpio:
 	@echo generating cpio...
-	@make_cpio.sh
+	@cp bin/main-riscv busybox/main
+	@find ./busybox | cpio -o -H newc > initramfs.cpio 
 
 run_vms:
 	@echo running vms...
@@ -47,7 +48,7 @@ build/riscv/%.o: src/%.cpp
 
 clean_build:
 	rm -rf build
-	@echo clean build
+	@echo clean build	
 
 clean:
 	rm -rf build bin
