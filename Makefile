@@ -22,6 +22,9 @@ cpio:
 	@cp bin/main-riscv busybox/main
 	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
+run_single_vm:
+	@qemu-system-riscv64 -machine virt -nographic -kernel Image -initrd initramfs.cpio --append "root=/dev/ram"
+
 run_vms:
 	@echo running vms...
 	@run_vms.sh
