@@ -1,6 +1,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/c,c++,visualstudiocode,visualstudio,jetbrains,jetbrains+all,jetbrains+iml
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,visualstudiocode,visualstudio,jetbrains,jetbrains+all,jetbrains+iml
 
+initramfs.cpio
+
 ### C ###
 # Prerequisites
 *.d
@@ -715,3 +717,4 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/c,c++,visualstudiocode,visualstudio,jetbrains,jetbrains+all,jetbrains+iml
 .vscode/launch.json
 .vscode/settings.json
+initramfs.cpio
