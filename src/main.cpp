@@ -64,7 +64,7 @@ static ssize_t send_broadcast_msg(int fd, const char* ifname, uint16_t ether_typ
 int main(int argc, char** argv) 
 {
     const char* ifname = (argc > 1 ? argv[1] : "eth0");
-    const uint16_t MY_ETHER_TYPE = 0x88B5; //whatever :)
+    const uint16_t MY_ETHER_TYPE = 0x88B5; //whatever u want :)
 
     //block sigrtmin and sigint signals on main thread
     int signo = SIGRTMIN;
