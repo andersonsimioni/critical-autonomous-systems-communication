@@ -124,6 +124,7 @@ int main(int argc, char** argv)
 
         //arrived rx event, print ready frames with self mac filter
         unsigned char buf[2048];
+        ulong received_time = 0; //time arrived
         for (;;) {
             ssize_t n = ::recv(s, buf, sizeof(buf), 0);
             if (n < 0) {

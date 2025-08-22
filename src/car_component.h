@@ -16,9 +16,9 @@ public:
     // smcreateflag("nome da regiao compart")
     // read..
     // write..
-    
+    // M = {*..}
 private:
-    BufferCommunicator _buf;
+    BufferCommunicator _buf; // = [timestamp, value]
 };
 
 #endif // car_component
