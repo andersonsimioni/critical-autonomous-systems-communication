@@ -15,9 +15,7 @@ public:
     class Address {
     public:
         static const int LENGTH = 6;
-        static Address BROADCAST() {
-            return Address({0xFF,0xFF,0xFF,0xFF,0xFF,0xFF});
-        }
+        static Address BROADCAST() { return Address({0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}); }
 
         Address() { addr.fill(0); }
         Address(const std::array<uint8_t,LENGTH>& a) : addr(a) {}
@@ -27,8 +25,7 @@ public:
 
         std::string str() const {
             char buf[18];
-            std::snprintf(buf,sizeof(buf),"%02X:%02X:%02X:%02X:%02X:%02X",
-                addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
+            std::snprintf(buf,sizeof(buf),"%02X:%02X:%02X:%02X:%02X:%02X", addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
             return std::string(buf);
         }
 

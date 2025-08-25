@@ -13,19 +13,19 @@
 // -----------------------------------------------------
 // Simple Protocol layered over NIC with logical ports.
 // - Endpoint = (MAC, port)
-// - Header   = (srcPort, dstPort, length)
-// - Packet   = Header + payload (bounded by Ethernet MTU)
+// - Header = (srcPort, dstPort, length)
+// - Packet = Header + payload (bounded by Ethernet MTU)
 // - Async path: NIC notifies this Protocol via Observer<Frame,ProtocolNumber>.
 // - Sync path: optional receive() helper (not used when fully async).
 // -----------------------------------------------------
 template <typename TNIC>
 class Protocol : public Observer<NetFrame, NetProtocolType> {
 public:
-    using NIC            = TNIC;
-    using Frame          = NetFrame;
+    using NIC      = TNIC;
+    using Frame    = NetFrame;
     using ProtocolNumber = NetProtocolType;
-    using Address        = NetMacAddress;
-    using Port           = uint16_t;
+    using Address  = NetMacAddress;
+    using Port     = uint16_t;
 
     struct Endpoint {
         Address mac{};
@@ -60,17 +60,13 @@ public:
     };
 
 public:
-    Protocol(NIC* n, ProtocolNumber etherType)
-        : nic(n), etherType_(etherType)
+    Protocol(NIC* n, ProtocolNumber etherType) : nic(n), etherType_(etherType)
     {
-        // Subscribe this Protocol to NIC's frame notifications
-        // NIC must inherit Observed<NetFrame, NetProtocolType>.
+        // Subscribe this Protocol to NICs frame notifications
         nic->attach(this);
     }
 
-    ~Protocol() {
-        nic->detach(this);
-    }
+    ~Protocol() {nic->detach(this);}
 
     // Send from "from" to "to" (broadcast MAC is allowed)
     int send(const Endpoint& from, const Endpoint& to, const void* payload, unsigned size) {
@@ -79,7 +75,7 @@ public:
         Packet pkt{};
         pkt.srcPort = from.port;
         pkt.dstPort = to.port;
-        pkt.length  = static_cast<uint16_t>(size);
+        pkt.length = static_cast<uint16_t>(size);
         std::memcpy(pkt.data, payload, size);
 
         // Serialize: header + payload contiguous
@@ -106,7 +102,7 @@ public:
         std::memcpy(out, buffer + sizeof(Header), payloadLen);
 
         from = Endpoint(srcMac, hdr.srcPort);
-        to   = Endpoint(nic->address(), hdr.dstPort);
+        to = Endpoint(nic->address(), hdr.dstPort);
         return static_cast<int>(payloadLen);
     }
 
@@ -121,10 +117,10 @@ public:
         unsigned payloadLen = f->size - sizeof(Header);
 
         AsyncCapsule cap;
-        cap.from   = Endpoint(f->src, hdr.srcPort);
-        cap.to     = Endpoint(f->dst, hdr.dstPort);
+        cap.from = Endpoint(f->src, hdr.srcPort);
+        cap.to = Endpoint(f->dst, hdr.dstPort);
         cap.length = static_cast<uint16_t>(payloadLen);
-        cap.proto  = pnum;
+        cap.proto = pnum;
 
         if(payloadLen > 0) {
             cap.payload.resize(payloadLen);

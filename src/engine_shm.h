@@ -21,7 +21,6 @@
 #include "engine.h"
 #include "ethernet.h"
 
-// NIC is non-template in your codebase
 class NIC;
 
 #ifndef _SEMUN_DEFINED
@@ -31,7 +30,7 @@ union semun { int val; struct semid_ds* buf; unsigned short* array; struct semin
 
 // Tunables
 static constexpr uint32_t SHM_MAX_CONSUMERS = 16;
-static constexpr uint32_t SHM_QUEUE_SLOTS   = 64;
+static constexpr uint32_t SHM_QUEUE_SLOTS = 64;
 
 // SHM layout: store the whole Ethernet::Frame verbatim
 struct ShmSlot {
@@ -92,15 +91,13 @@ public:
         return register_me();
     }
 
-    // Keep for compatibility with your NIC (not virtual in base)
     void bindNIC(NIC* nic_ptr) { _nic = nic_ptr; }
-
     const Address& address() const { return _addr; }
     void address(const Address& a) { _addr = a; }
 
     void setNotifySignal(int signo) { _sig = signo; }
 
-    // ---- Engine API (exact signatures) ----
+    //send ethernet frame through shm
     int send(const Ethernet::Frame& frame) override {
         if (!_bus || _me < 0) return -1;
 
@@ -123,7 +120,7 @@ public:
     int receive(Ethernet::Frame& out) {
         if (!_bus || _me < 0) return -1;
 
-        // Wait for one item in my queue
+        //wait for one item in queue
         sem_add(sem_q(_me), -1);
 
         auto& q = _bus->q[_me];
@@ -131,14 +128,12 @@ public:
         if (!dequeue(q, f)) return -1;
 
         out = f; // copy whole frame
-        return 1; // success (you can return payload size if your NIC expects it)
+        return 1; // success
     }
 
-    int start() {
-        // SHM não precisa de thread de polling como a Ethernet.
-        // Se você usa sinais para notificar, a infra já está montada no ctor.
-        return 0;
-    }
+
+    //no use this, use signal to notify
+    int start() { return 0; }
 
 private:
     // Registration
@@ -175,7 +170,7 @@ private:
         uint32_t n = next(q.wr);
         if (n == q.rd) return false; // full -> drop
         q.slots[q.wr].frame = f;     // copy whole frame
-        q.slots[q.wr].used  = 1;
+        q.slots[q.wr].used = 1;
         q.wr = n;
         return true;
     }

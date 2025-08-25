@@ -12,7 +12,7 @@
 class NIC;
 
 // -----------------------------------------------------
-// NIC as an Observed subject of frames (proto-number keyed)
+// NIC as an Observed subject of frames
 // -----------------------------------------------------
 class NIC : public Ethernet,
             public Observed<NetFrame, NetProtocolType>

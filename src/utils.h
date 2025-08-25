@@ -21,7 +21,7 @@
 template <typename TNIC>
 class Printer : public Protocol<TNIC>::PortObserver {
 public:
-    using Proto    = Protocol<TNIC>;
+    using Proto = Protocol<TNIC>;
     using Endpoint = typename Proto::Endpoint;
 
     explicit Printer(uint16_t dstPort) : dstPort_(dstPort) {}
@@ -34,10 +34,9 @@ public:
                    unsigned len) override
     {
         // get timestamp now
-        auto now   = std::chrono::system_clock::now();
-        auto t     = std::chrono::system_clock::to_time_t(now);
-        auto ms    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        now.time_since_epoch()) % 1000;
+        auto now = std::chrono::system_clock::now();
+        auto t = std::chrono::system_clock::to_time_t(now);
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
         std::tm tm = *std::localtime(&t);
 
         // format HH:MM:SS.mmm
@@ -64,7 +63,7 @@ private:
 template <typename TNIC>
 class PeriodicSender {
 public:
-    using Proto    = Protocol<TNIC>;
+    using Proto = Protocol<TNIC>;
     using Endpoint = typename Proto::Endpoint;
 
     PeriodicSender(Proto* proto,
@@ -80,9 +79,7 @@ public:
         arm();
     }
 
-    static void on_alarm(int) {
-        if(instance_) instance_->tick();
-    }
+    static void on_alarm(int) {if(instance_) instance_->tick();}
 
     void tick() {
         proto_->send(from_, to_, payload_.data(), static_cast<unsigned>(payload_.size()));
@@ -93,7 +90,7 @@ public:
 private:
     void arm() {
         struct itimerval t{};
-        t.it_value.tv_sec  = period_us_ / 1000000UL;
+        t.it_value.tv_sec = period_us_ / 1000000UL;
         t.it_value.tv_usec = period_us_ % 1000000UL;
         setitimer(ITIMER_REAL, &t, nullptr);
     }

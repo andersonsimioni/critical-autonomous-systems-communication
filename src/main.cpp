@@ -12,7 +12,7 @@
 #include "engine_shm.h"
 #include "nic.h"
 #include "protocol.h"
-#include "communicator.h"   // Communicator<NIC> + ChannelOrigin
+#include "communicator.h"
 
 static constexpr NetProtocolType ETYPE = 0x123;
 static constexpr uint16_t        PORT  = 123;
@@ -21,38 +21,30 @@ int main(int argc, char** argv) {
     try {
         const char* ifname = (argc > 1 ? argv[1] : "eth0");
 
-        // Engines conforme suas assinaturas reais
-        EngineEthernet engEth(ifname);  // ctor aceita só o nome da interface
-        EngineShm      engShm;          // default
+        EngineShm engShm;
+        EngineEthernet engEth(ifname);
+        Ethernet::Address myMac = engEth.mac();
 
-        // MAC local obtido da placa
-        auto myMac = engEth.mac();
-
-        // NICs + Protocols (um para cada meio)
+        // NICs + Protocols
         NIC nicEth(&engEth, myMac);
         NIC nicShm(&engShm, myMac);
         Protocol<NIC> protoEth(&nicEth, ETYPE);
         Protocol<NIC> protoShm(&nicShm, ETYPE);
 
-        // Communicator: roteia (mesmo MAC -> SHM, broadcast -> Ethernet)
+        // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
         Communicator<NIC> comm(&protoEth, &protoShm, { myMac, PORT });
 
-        // Inicia RX de cada engine
-        engEth.start();
-        engShm.start();
-
-        std::cout << "[*] Escutando porta " << PORT
+        std::cout << "[*] Listening " << PORT
                   << " / EtherType 0x" << std::hex << (unsigned)ETYPE << std::dec
                   << "  MAC=" << myMac.str() << "\n";
 
-        // Endpoints úteis
         Protocol<NIC>::Endpoint me      { myMac, PORT };
         Protocol<NIC>::Endpoint toLocal { myMac, PORT };
         Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
 
         // Thread de envio de teste:
-        //   - via Ethernet (broadcast)
-        //   - via SHM (para o próprio MAC)
+        //   - to Ethernet (broadcast)
+        //   - to SHM (for self MAC)
         std::thread tx([&]{
             int n = 0;
             while (true) {
@@ -68,7 +60,7 @@ int main(int argc, char** argv) {
         });
         tx.detach();
 
-        // Loop de recepção: imprime origem (ETHERNET/SHM), endpoints e payload
+        // Loop print origin (ETHERNET/SHM), endpoints e payload
         while (true) {
             auto rx = comm.receive(); // bloqueante
             std::string payload(rx.payload.begin(), rx.payload.end());

@@ -29,20 +29,19 @@
 // -----------------------------------------------------
 class EngineEthernet : public Engine {
 public:
-    explicit EngineEthernet(const char* ifname)
-        : sock_(-1), ifindex_(0)
+    explicit EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0)
     {
         if(!ifname || !*ifname) throw std::invalid_argument("empty ifname");
 
-        // 1) Open raw socket
+        //open raw socket
         sock_ = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
         if(sock_ < 0) throw std::runtime_error("socket(AF_PACKET) failed");
 
-        // 2) Get interface index
+        //Get network interface index by name, ex: eth0 = 123
         ifindex_ = if_nametoindex(ifname);
         if(ifindex_ == 0) { close_safe(); throw std::runtime_error("if_nametoindex failed"); }
 
-        // 3) Get REAL MAC
+        //Get current MAC address
         {
             struct ifreq ifr{};
             std::strncpy(ifr.ifr_name, ifname, IFNAMSIZ-1);
@@ -52,18 +51,20 @@ public:
             mac_ = Ethernet::Address(std::array<uint8_t,6>{mac_bytes_[0],mac_bytes_[1],mac_bytes_[2],mac_bytes_[3],mac_bytes_[4],mac_bytes_[5]});
         }
 
-        // 4) Bind to interface
+        //Bind to interface
         {
             struct sockaddr_ll sll{};
-            sll.sll_family   = AF_PACKET;
+            sll.sll_family = AF_PACKET;
             sll.sll_protocol = htons(ETH_P_ALL);
-            sll.sll_ifindex  = static_cast<int>(ifindex_);
-            if(bind(sock_, reinterpret_cast<struct sockaddr*>(&sll), sizeof(sll)) < 0) {
-                close_safe(); throw std::runtime_error("bind(AF_PACKET) failed");
+            sll.sll_ifindex = static_cast<int>(ifindex_);
+            if(bind(sock_, reinterpret_cast<struct sockaddr*>(&sll), sizeof(sll)) < 0) 
+            {
+                close_safe(); 
+                throw std::runtime_error("bind(AF_PACKET) failed");
             }
         }
 
-        // 5) Enable async notifications (SIGIO) + non-blocking
+        //Enable async notifications (SIGIO) + non-blocking / without busy-wait
         {
             fcntl(sock_, F_SETOWN, getpid());
             int flags = fcntl(sock_, F_GETFL, 0);
@@ -101,34 +102,32 @@ public:
 
         // Destination L2 address
         struct sockaddr_ll sll{};
-        sll.sll_family   = AF_PACKET;
+        sll.sll_family = AF_PACKET;
         sll.sll_protocol = htons(frame.proto);
-        sll.sll_ifindex  = static_cast<int>(ifindex_);
-        sll.sll_halen    = 6;
+        sll.sll_ifindex = static_cast<int>(ifindex_);
+        sll.sll_halen = 6;
         std::memcpy(sll.sll_addr, dst.data(), 6);
 
-        ssize_t sent = ::sendto(sock_, buf.data(), buf.size(), 0,
-                                reinterpret_cast<struct sockaddr*>(&sll), sizeof(sll));
-        return (sent < 0) ? -1
-                          : static_cast<int>(sent > (ssize_t)sizeof(hdr) ? sent - sizeof(hdr) : 0);
+        ssize_t sent = ::sendto(sock_, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&sll), sizeof(sll));
+        return (sent < 0) ? -1 : static_cast<int>(sent > (ssize_t)sizeof(hdr) ? sent - sizeof(hdr) : 0);
     }
 
-    int start() override {
-        // Nothing extra: socket already armed for SIGIO
-        return 0;
-    }
+    int start() override {return 0;}
 
     Ethernet::Address mac() const { return mac_; }
 
 private:
-    // Convert Address string "AA:BB:CC:DD:EE:FF" -> bytes
+    // Convert address string "AA:BB:CC:DD:EE:FF" -> bytes
     static bool address_to_bytes(const Ethernet::Address& a, std::array<uint8_t,6>& out) {
         auto s = a.str();
         unsigned b0,b1,b2,b3,b4,b5;
-        if(std::sscanf(s.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x",
-                       &b0,&b1,&b2,&b3,&b4,&b5) != 6) return false;
-        out = {static_cast<uint8_t>(b0),static_cast<uint8_t>(b1),static_cast<uint8_t>(b2),
-               static_cast<uint8_t>(b3),static_cast<uint8_t>(b4),static_cast<uint8_t>(b5)};
+        if(std::sscanf(s.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x", &b0,&b1,&b2,&b3,&b4,&b5) != 6) return false;
+        
+        out = {
+            static_cast<uint8_t>(b0),static_cast<uint8_t>(b1),static_cast<uint8_t>(b2),
+            static_cast<uint8_t>(b3),static_cast<uint8_t>(b4),static_cast<uint8_t>(b5)
+        };
+
         return true;
     }
 
@@ -151,27 +150,32 @@ private:
             std::memcpy(&hdr, buf, sizeof(hdr));
 
             uint16_t proto = ntohs(hdr.ether_type);
-            size_t   plen  = static_cast<size_t>(n) - sizeof(hdr);
+            size_t   plen = static_cast<size_t>(n) - sizeof(hdr);
             if(plen > (size_t)Ethernet::Frame::MAX_DATA) plen = Ethernet::Frame::MAX_DATA;
 
             Ethernet::Frame f;
+            
+            //convert source host into MAC address byte array
             f.src = Ethernet::Address(std::array<uint8_t,6>{
                 hdr.ether_shost[0],hdr.ether_shost[1],hdr.ether_shost[2],
-                hdr.ether_shost[3],hdr.ether_shost[4],hdr.ether_shost[5]});
+                hdr.ether_shost[3],hdr.ether_shost[4],hdr.ether_shost[5]
+            });
+            
+            //convert destination host into MAC address byte array
             f.dst = Ethernet::Address(std::array<uint8_t,6>{
                 hdr.ether_dhost[0],hdr.ether_dhost[1],hdr.ether_dhost[2],
-                hdr.ether_dhost[3],hdr.ether_dhost[4],hdr.ether_dhost[5]});
-            f.proto = proto;
-            f.size  = static_cast<unsigned>(plen);
+                hdr.ether_dhost[3],hdr.ether_dhost[4],hdr.ether_dhost[5]
+            });
+
+            f.proto = proto; //protocol
+            f.size = static_cast<unsigned>(plen);
             std::memcpy(f.data, buf + sizeof(hdr), plen);
 
             if(nic) nic->on_frame(f);
         }
     }
 
-    void close_safe() {
-        if(sock_ >= 0) { ::close(sock_); sock_ = -1; }
-    }
+    void close_safe() { if(sock_ >= 0) { ::close(sock_); sock_ = -1; } }
 
 private:
     int                      sock_;

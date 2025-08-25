@@ -11,15 +11,15 @@
 #include "ethernet.h"
 #include "protocol.h"
 
-// origem do pacote
+// packet origin
 enum class ChannelOrigin : unsigned char { Ethernet = 0, SharedMemory = 1 };
 
 template <typename TNIC>
 class Communicator {
 public:
     using ProtocolT = Protocol<TNIC>;
-    using Endpoint  = typename ProtocolT::Endpoint;
-    using Address   = Ethernet::Address;
+    using Endpoint = typename ProtocolT::Endpoint;
+    using Address = Ethernet::Address;
 
     struct Rx {
         Endpoint      from;
@@ -46,17 +46,18 @@ public:
         delete _ethObs; delete _shmObs;
     }
 
-    // roteia envio
+    // route the send
+    // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
         if (to.mac == Address::BROADCAST()) {
             Endpoint bto = to;
             bto.mac = Address::BROADCAST();
             return _eth->send(_local, bto, data, (unsigned)len);
         }
-        if (to.mac == _local.mac) {
-            return _shm->send(_local, to, data, (unsigned)len);
-        }
-        // fallback: joga no broadcast ethernet
+
+        if (to.mac == _local.mac) return _shm->send(_local, to, data, (unsigned)len);
+
+        // fallback send broadcast ethernet
         Endpoint bto = to;
         bto.mac = Address::BROADCAST();
         return _eth->send(_local, bto, data, (unsigned)len);
@@ -94,7 +95,7 @@ private:
                        const uint8_t* data, unsigned len) override {
             Communicator::Rx rx;
             rx.from = from;
-            rx.to   = to;
+            rx.to = to;
             rx.payload.assign(data, data+len);
             rx.origin = _origin;
             _owner->enqueue(std::move(rx));
