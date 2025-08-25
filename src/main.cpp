@@ -1,56 +1,85 @@
 #include <csignal>
+#include <cstring>
 #include <iostream>
 #include <string>
-#include <unistd.h>
+#include <thread>
+#include <chrono>
 
 #include "ethernet.h"
 #include "frame.h"
 #include "engine.h"
 #include "engine_ethernet.h"
+#include "engine_shm.h"
 #include "nic.h"
 #include "protocol.h"
-#include "utils.h"   // <- Printer / PeriodicSender
+#include "communicator.h"   // Communicator<NIC> + ChannelOrigin
 
-static constexpr NetProtocolType ETYPE    = 0x123;
-static constexpr uint16_t        DST_PORT = 123;
-
-static void usage(const char* prog) {
-    std::cout << "Usage: sudo " << prog << " <iface> [message]\n"
-              << "  <iface>   : VM interface (e.g., eth0)\n"
-              << "  [message] : optional payload (default: \"ping\")\n";
-}
+static constexpr NetProtocolType ETYPE = 0x123;
+static constexpr uint16_t        PORT  = 123;
 
 int main(int argc, char** argv) {
-    if(argc < 2) { usage(argv[0]); return 1; }
-    std::string iface   = argv[1];
-    std::string message = (argc >= 3) ? argv[2] : "ping";
-
     try {
-        // Transport: Ethernet
-        EngineEthernet eng(iface.c_str());
-        NIC nic(&eng, eng.mac());
+        const char* ifname = (argc > 1 ? argv[1] : "eth0");
 
-        // Protocol for framing/multiplexing
-        Protocol<NIC> proto(&nic, ETYPE);
+        // Engines conforme suas assinaturas reais
+        EngineEthernet engEth(ifname);  // ctor aceita só o nome da interface
+        EngineShm      engShm;          // default
 
-        // RX observer on DST_PORT
-        Printer<NIC> printer(DST_PORT);
-        proto.attach(&printer);
+        // MAC local obtido da placa
+        auto myMac = engEth.mac();
 
-        // Endpoints (my addr/port, broadcast/port)
-        Protocol<NIC>::Endpoint me(eng.mac(), DST_PORT);
-        Protocol<NIC>::Endpoint all(NetMacAddress::BROADCAST(), DST_PORT);
+        // NICs + Protocols (um para cada meio)
+        NIC nicEth(&engEth, myMac);
+        NIC nicShm(&engShm, myMac);
+        Protocol<NIC> protoEth(&nicEth, ETYPE);
+        Protocol<NIC> protoShm(&nicShm, ETYPE);
 
-        // Start engine RX (raw socket polling/thread inside EngineEthernet)
-        eng.start();
+        // Communicator: roteia (mesmo MAC -> SHM, broadcast -> Ethernet)
+        Communicator<NIC> comm(&protoEth, &protoShm, { myMac, PORT });
 
-        // Periodic broadcast using your PeriodicSender (every 2000 ms)
-        PeriodicSender<NIC> sender(&proto, me, all, message, 2000);
+        // Inicia RX de cada engine
+        engEth.start();
+        engShm.start();
 
-        // Keep process alive (signals/threads do the work)
-        for(;;) pause();
+        std::cout << "[*] Escutando porta " << PORT
+                  << " / EtherType 0x" << std::hex << (unsigned)ETYPE << std::dec
+                  << "  MAC=" << myMac.str() << "\n";
 
-    } catch(const std::exception& e) {
+        // Endpoints úteis
+        Protocol<NIC>::Endpoint me      { myMac, PORT };
+        Protocol<NIC>::Endpoint toLocal { myMac, PORT };
+        Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
+
+        // Thread de envio de teste:
+        //   - via Ethernet (broadcast)
+        //   - via SHM (para o próprio MAC)
+        std::thread tx([&]{
+            int n = 0;
+            while (true) {
+                std::string via_eth = "hello-bcast-" + std::to_string(n);
+                comm.send(toBcast, via_eth);
+
+                std::string via_shm = "ping-local-" + std::to_string(n);
+                comm.send(toLocal, via_shm);
+
+                ++n;
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            }
+        });
+        tx.detach();
+
+        // Loop de recepção: imprime origem (ETHERNET/SHM), endpoints e payload
+        while (true) {
+            auto rx = comm.receive(); // bloqueante
+            std::string payload(rx.payload.begin(), rx.payload.end());
+            std::cout << "[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
+                      << rx.from.mac.str() << ":" << rx.from.port
+                      << " -> " << rx.to.mac.str()   << ":" << rx.to.port
+                      << "  len=" << rx.payload.size()
+                      << "  data=\"" << payload << "\"\n";
+        }
+
+    } catch (const std::exception& e) {
         std::cerr << "Fatal: " << e.what() << "\n";
         return 2;
     }

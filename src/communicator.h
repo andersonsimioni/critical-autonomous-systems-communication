@@ -1,110 +1,125 @@
 #pragma once
-// Minimal, header-only Communicator for the SO2 project.
-// Works with a NIC that exposes: 
-//   int send(const Ethernet::Address&, Ethernet::Protocol, const void*, size_t);
-//   int receive(Ethernet::Address* src, Ethernet::Protocol* proto, void* out, size_t max);
-// and an Engine underneath that notifies via POSIX signal (e.g., SIGUSR1).
 
-#include <functional>
-#include <atomic>
-#include <csignal>
+#include <vector>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 #include <cstring>
-#include <unistd.h>
+#include <stdexcept>
+#include <string>
 
-#include "ethernet.h" // must define Ethernet::Address (6 bytes) and Ethernet::Protocol
+#include "ethernet.h"
+#include "protocol.h"
 
-template <typename NicT>
+// origem do pacote
+enum class ChannelOrigin : unsigned char { Ethernet = 0, SharedMemory = 1 };
+
+template <typename TNIC>
 class Communicator {
 public:
-    using Address = Ethernet::Address;
-    using Protocol = Ethernet::Protocol;
-    using RxCallback = std::function<void(const Address& src, Protocol proto, const uint8_t* data, size_t size)>;
+    using ProtocolT = Protocol<TNIC>;
+    using Endpoint  = typename ProtocolT::Endpoint;
+    using Address   = Ethernet::Address;
 
-    explicit Communicator(NicT& nic, Protocol proto): _nic(nic), _proto(proto) { }
+    struct Rx {
+        Endpoint      from;
+        Endpoint      to;
+        std::vector<uint8_t> payload;
+        ChannelOrigin origin;
+    };
 
-    // Set broadcast address if your stack uses another convention
-    void setBroadcast(const Address& b) { _bcast = b; }
+    Communicator(ProtocolT* protoEth, ProtocolT* protoShm, const Endpoint& local)
+        : _eth(protoEth), _shm(protoShm), _local(local)
+    {
+        if(!_eth || !_shm) throw std::runtime_error("Communicator: null protocol");
 
-    // Install signal-based observer (default SIGUSR1, same used by EngineShm)
-    void installObserver(int signo = SIGUSR1) {
-        _signo = signo;
+        _ethObs = new PortObserverImpl(this, ChannelOrigin::Ethernet, local.port);
+        _shmObs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, local.port);
 
-        // Install handler once per process (idempotent for this class)
-        struct sigaction sa{};
-        sa.sa_handler = &Communicator::on_signal_static;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0; // keep it simple; avoid SA_RESTART here
-        sigaction(_signo, &sa, nullptr);
+        _eth->attach(_ethObs);
+        _shm->attach(_shmObs);
     }
 
-    // Register message callback. Called in the same thread that calls run()/handleOnce().
-    void onMessage(RxCallback cb) { _cb = std::move(cb); }
-
-    // Send helper (defaults to broadcast)
-    int send(const void* data, size_t size, const Address& dst = broadcast()) {
-        return _nic.send(dst, _proto, data, size);
+    ~Communicator() {
+        if(_eth && _ethObs) _eth->detach(_ethObs);
+        if(_shm && _shmObs) _shm->detach(_shmObs);
+        delete _ethObs; delete _shmObs;
     }
 
-    // Blocking: wait for one notification and handle a single message.
-    // Returns: bytes handled (>0), 0 if truncated, -1 on error.
-    int handleOnce() {
-        // Wait until a signal marks ready (very light wait loop).
-        wait_for_signal();
-
-        // Drain just ONE message (simple & safe). If multiple arrived, virão mais sinais.
-        Address src{};
-        Protocol pr{};
-        uint8_t buf[_maxPayload]{};
-        int n = _nic.receive(&src, &pr, buf, sizeof(buf));
-        if (n >= 0 && _cb) _cb(src, pr, buf, (n>0 ? (size_t)n : 0));
-        return n;
-    }
-
-    // Simple loop: waits for signals and handles messages one by one.
-    // Break condition: stop() called from another thread or callback.
-    void run() {
-        _running = true;
-        while (_running) {
-            if (handleOnce() < 0) {
-                // On error, you may choose to sleep a bit to avoid a busy loop.
-                usleep(1000);
-            }
+    // roteia envio
+    int send(const Endpoint& to, const void* data, size_t len) {
+        if (to.mac == Address::BROADCAST()) {
+            Endpoint bto = to;
+            bto.mac = Address::BROADCAST();
+            return _eth->send(_local, bto, data, (unsigned)len);
         }
+        if (to.mac == _local.mac) {
+            return _shm->send(_local, to, data, (unsigned)len);
+        }
+        // fallback: joga no broadcast ethernet
+        Endpoint bto = to;
+        bto.mac = Address::BROADCAST();
+        return _eth->send(_local, bto, data, (unsigned)len);
     }
 
-    // Stop the loop (thread-safe).
-    void stop() { _running = false; }
+    int send(const Endpoint& to, const std::string& s) {
+        return send(to, s.data(), s.size());
+    }
 
-    // Expose current broadcast
-    const Address& broadcast() const { return _bcast; }
+    Rx receive() {
+        std::unique_lock<std::mutex> lk(_mtx);
+        _cv.wait(lk, [&]{ return !_queue.empty(); });
+        Rx r = std::move(_queue.front());
+        _queue.pop();
+        return r;
+    }
+
+    bool try_receive(Rx& out) {
+        std::lock_guard<std::mutex> lk(_mtx);
+        if(_queue.empty()) return false;
+        out = std::move(_queue.front());
+        _queue.pop();
+        return true;
+    }
+
+    Endpoint local() const { return _local; }
 
 private:
-    // ---- lightweight signal wait ----
-    static void on_signal_static(int) {
-        // mark that at least one message is ready
-        g_ready.store(true, std::memory_order_release);
-    }
-
-    void wait_for_signal() {
-        // Fast path: if flag already set, consume it and continue.
-        while (true) {
-            if (g_ready.exchange(false, std::memory_order_acq_rel)) return;
-
-            // Sleep briefly; in real systems you could use signalfd/ppoll for elegance.
-            // Here we keep it simple and portable without extra syscalls.
-            // NOTE: usleep is async-signal-safe to call outside the handler.
-            usleep(500);
+    class PortObserverImpl : public ProtocolT::PortObserver {
+    public:
+        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port)
+            : _owner(owner), _origin(origin), _port(port) {}
+        uint16_t port() const override { return _port; }
+        void on_packet(const Endpoint& from, const Endpoint& to,
+                       const uint8_t* data, unsigned len) override {
+            Communicator::Rx rx;
+            rx.from = from;
+            rx.to   = to;
+            rx.payload.assign(data, data+len);
+            rx.origin = _origin;
+            _owner->enqueue(std::move(rx));
         }
+    private:
+        Communicator*  _owner;
+        ChannelOrigin  _origin;
+        uint16_t       _port;
+    };
+
+    void enqueue(Rx&& r) {
+        std::lock_guard<std::mutex> lk(_mtx);
+        _queue.push(std::move(r));
+        _cv.notify_one();
     }
 
 private:
-    NicT&     _nic;
-    Protocol  _proto;
-    Address   _bcast{{0xff,0xff,0xff,0xff,0xff,0xff}};
-    RxCallback _cb;
+    ProtocolT* _eth{nullptr};
+    ProtocolT* _shm{nullptr};
+    Endpoint   _local{};
 
-    int _signo{SIGUSR1};
-    static inline std::atomic<bool> g_ready{false};
-    static constexpr size_t _maxPayload = 1600; // should be >= NIC/Engine MTU
-    std::atomic<bool> _running{false};
+    PortObserverImpl* _ethObs{nullptr};
+    PortObserverImpl* _shmObs{nullptr};
+
+    std::mutex              _mtx;
+    std::condition_variable _cv;
+    std::queue<Rx>          _queue;
 };

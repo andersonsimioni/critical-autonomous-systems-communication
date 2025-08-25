@@ -134,6 +134,12 @@ public:
         return 1; // success (you can return payload size if your NIC expects it)
     }
 
+    int start() {
+        // SHM não precisa de thread de polling como a Ethernet.
+        // Se você usa sinais para notificar, a infra já está montada no ctor.
+        return 0;
+    }
+
 private:
     // Registration
     bool register_me() {
@@ -194,6 +200,8 @@ private:
         struct sembuf op{ (unsigned short)semnum, (short)delta, 0 };
         while (semop(_sem, &op, 1) == -1 && errno == EINTR) { /* retry */ }
     }
+
+    
 
 private:
     int      _shm{-1};
