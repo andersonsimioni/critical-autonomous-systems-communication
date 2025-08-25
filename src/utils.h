@@ -42,8 +42,7 @@ public:
 
         // format HH:MM:SS.mmm
         std::ostringstream ts;
-        ts << std::put_time(&tm, "%H:%M:%S")
-           << "." << std::setfill('0') << std::setw(3) << ms.count();
+        ts << std::put_time(&tm, "%H:%M:%S") << "." << std::setfill('0') << std::setw(3) << ms.count();
 
         // payload string
         std::string s(reinterpret_cast<const char*>(data), len);
@@ -86,8 +85,7 @@ public:
     }
 
     void tick() {
-        proto_->send(from_, to_, payload_.data(),
-                     static_cast<unsigned>(payload_.size()));
+        proto_->send(from_, to_, payload_.data(), static_cast<unsigned>(payload_.size()));
         std::cout << "[TX] \"" << payload_ << "\" to broadcast port=" << to_.port << "\n";
         arm();
     }
