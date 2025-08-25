@@ -5,4 +5,4 @@ mount -t devtmpfs none /dev
 mount -t proc proc /proc
 ip link set dev eth0 up 
 #exec /bin/sh
-exec /main
+exec /main eth0 ping

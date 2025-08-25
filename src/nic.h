@@ -1,38 +1,50 @@
 #ifndef NIC_H
 #define NIC_H
 
-#include <string>
-#include <cstdint>
+#include <algorithm>
+#include <cstring>
 #include "ethernet.h"
+#include "frame.h"
 #include "engine.h"
+#include "observer.h"
 
-class NIC {
+// Forward decl to avoid circular problems if needed
+class NIC;
+
+// -----------------------------------------------------
+// NIC as an Observed subject of frames (proto-number keyed)
+// -----------------------------------------------------
+class NIC : public Ethernet,
+            public Observed<NetFrame, NetProtocolType>
+{
 public:
-    using Address = Ethernet::Address;
+    NIC(Engine* e, Address addr) : engine(e), mac(addr) {
+        engine->bindNIC(this);
+    }
 
-    // iface example: tap0, eth0..
-    NIC(Engine& engine, const std::string& iface);
-    ~NIC() = default;
+    int send(Address dst, Protocol proto, const void* data, unsigned int size) {
+        Frame f;
+        f.src = mac;
+        f.dst = dst;
+        f.proto = proto;
+        f.size = size;
+        std::memcpy(f.data, data, size);
+        return engine->send(f);
+    }
 
-    // NIC of MAC
-    const Address& address() const { return _mac; }
+    // called by Engine when a frame is ready
+    void on_frame(const Frame& f) {
+        // copy, then notify all observers registered on this NIC
+        if(f.src == mac) return;
+        Frame* copy = new Frame(f);
+        this->notify(f.proto, copy);
+    }
 
-    // Set MAC manually
-    void address(const Address& mac) { _mac = mac; }
-
-    // Send a payload with EtherType passed, dst is broadcast
-    bool send(const Address& dst, uint16_t etherType, const void* data, size_t size);
-
-    // Receive the byte len of a payload, also the received etherType and MAC
-    int receive(Address* src, uint16_t* etherType, void* out, size_t maxSize);
+    const Address& address() const { return mac; }
 
 private:
-    bool fetchInterfaceMAC(const std::string& iface);
-
-private:
-    Engine& _engine;
-    Address _mac;
-    std::string _iface;
+    Engine* engine;
+    Address mac;
 };
 
 #endif // NIC_H

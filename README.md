@@ -4,6 +4,9 @@ This is some C++ thing for talking between virtual machines like cars, so we wil
 We using raw sockets and some custom protocol stuff. 
 The main goal is make a VM communicate to another VM with max 600 bytes and lowest latency possible. 
 
+## Arch
+Kernel → SIGIO → Engine → NIC → Protocol (Observer).
+
 ## How to build
 
 Deps:

@@ -1,27 +1,23 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
-#include <string>
-#include <vector>
-#include <cstdint>
+#include "ethernet.h"
 
+class NIC; // forward declaration
+
+// -----------------------------------------------------
+// Abstract Engine
+// -----------------------------------------------------
 class Engine {
 public:
-    Engine(const std::string& iface);
-    ~Engine();
+    virtual ~Engine() {}
+    void bindNIC(NIC* n) { nic = n; }
 
-    bool openSocket();
-    void closeSocket();
+    virtual int send(const Ethernet::Frame& frame) = 0;
+    virtual int start() = 0; // begin async receive
 
-    bool sendFrame(const uint8_t* data, size_t len);
-    int recvFrame(uint8_t* buffer, size_t maxlen);
-
-private:
-    std::string interfaceName;
-    int sockfd;
-    int ifindex; // interface index
-
-    bool getInterfaceIndex();
+protected:
+    NIC* nic = nullptr; // back reference to NIC
 };
 
 #endif // ENGINE_H

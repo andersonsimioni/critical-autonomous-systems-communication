@@ -1,41 +1,55 @@
 #ifndef ETHERNET_H
 #define ETHERNET_H
 
+#include <array>
 #include <cstdint>
-#include <string>
+#include <cstring>
+#include <iostream>
 
-namespace Ethernet {
+// -----------------------------------------------------
+// Ethernet definitions
+// -----------------------------------------------------
+class Ethernet {
+public:
+    // Ethernet MAC address (6 bytes)
+    class Address {
+    public:
+        static const int LENGTH = 6;
+        static Address BROADCAST() {
+            return Address({0xFF,0xFF,0xFF,0xFF,0xFF,0xFF});
+        }
 
-    static const int ADDR_LEN = 6; // MAC SIZE
-    static const int MTU = 1500; // PAYLOAD SIZE
-    static const int FRAME_MAX = 1514;
+        Address() { addr.fill(0); }
+        Address(const std::array<uint8_t,LENGTH>& a) : addr(a) {}
 
-    // MAC ADDRESS
-    struct Address {
-        uint8_t bytes[ADDR_LEN];
+        bool operator==(const Address& other) const { return addr == other.addr; }
+        bool operator!=(const Address& other) const { return !(*this==other); }
 
-        Address();
-        Address(const uint8_t* addr);
-        static Address broadcast();
+        std::string str() const {
+            char buf[18];
+            std::snprintf(buf,sizeof(buf),"%02X:%02X:%02X:%02X:%02X:%02X",
+                addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
+            return std::string(buf);
+        }
 
-        std::string toString() const;
-        bool operator==(const Address& other) const;
-        bool operator!=(const Address& other) const;
-    } __attribute__((packed));
+    private:
+        std::array<uint8_t,LENGTH> addr;
+    };
 
-    // Header of Ethernet
-    struct Header {
+    // Ethernet protocol type (16 bits)
+    using Protocol = uint16_t;
+
+    // Ethernet frame
+    struct Frame {
         Address dst;
         Address src;
-        uint16_t type; // EtherType
-    } __attribute__((packed));
+        Protocol proto;
+        static const int MAX_DATA = 1500;
+        uint8_t data[MAX_DATA];
+        unsigned int size; // real size of data
 
-    // Ethernet Frame
-    struct Frame {
-        Header header;
-        uint8_t payload[MTU];
-    } __attribute__((packed));
-
-} // namespace Ethernet
+        Frame() : proto(0), size(0) {}
+    };
+};
 
 #endif // ETHERNET_H
