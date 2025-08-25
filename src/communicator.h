@@ -20,8 +20,7 @@ public:
     using Protocol = Ethernet::Protocol;
     using RxCallback = std::function<void(const Address& src, Protocol proto, const uint8_t* data, size_t size)>;
 
-    explicit Communicator(NicT& nic, Protocol proto)
-        : _nic(nic), _proto(proto) { }
+    explicit Communicator(NicT& nic, Protocol proto): _nic(nic), _proto(proto) { }
 
     // Set broadcast address if your stack uses another convention
     void setBroadcast(const Address& b) { _bcast = b; }

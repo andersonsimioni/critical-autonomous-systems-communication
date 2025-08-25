@@ -11,8 +11,8 @@
 #include "protocol.h"
 #include "utils.h"   // <- Printer / PeriodicSender
 
-static constexpr NetProtocolType ETYPE    = 0x88B5;
-static constexpr uint16_t        DST_PORT = 4242;
+static constexpr NetProtocolType ETYPE    = 0x123;
+static constexpr uint16_t        DST_PORT = 123;
 
 static void usage(const char* prog) {
     std::cout << "Usage: sudo " << prog << " <iface> [message]\n"
