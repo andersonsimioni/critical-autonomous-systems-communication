@@ -67,7 +67,7 @@ public:
     : Base(comm, port, "Gateway") {}
 
 protected:
-    void on_rx(const Rx& rx) override {
+    void on_receive(const Rx& rx) override {
         if (rx.origin == ChannelOrigin::SharedMemory) {
             // From local components → broadcast to fleet
             Base::send_broadcast(rx.payload.data(), rx.payload.size());
