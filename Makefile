@@ -24,7 +24,7 @@ cpio:
 
 run_vms:
 	@echo running vms...
-	@./run_vms.sh
+	@bash ./run_vms.sh
 
 x86: $(OBJ_X86)
 	@echo compiling for x86...
