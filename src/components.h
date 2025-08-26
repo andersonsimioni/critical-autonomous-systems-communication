@@ -53,27 +53,3 @@ protected:
         }
     }
 };
-
-// ---- Gateway ECU ----
-// Bridges between Ethernet and SHM using Communicator routing rules.
-// Policy: forward SHM→Ethernet (broadcast) and Ethernet→SHM (local fanout) at same port.
-
-template <typename TNIC>
-class GatewayComponent : public CarComponent<TNIC> {
-    using Base = CarComponent<TNIC>;
-    using Rx = typename Base::CommunicatorT::Rx;
-public:
-    GatewayComponent(typename Base::CommunicatorT* comm, uint16_t port)
-    : Base(comm, port, "Gateway") {}
-
-protected:
-    void on_receive(const Rx& rx) override {
-        if (rx.origin == ChannelOrigin::SharedMemory) {
-            // From local components → broadcast to fleet
-            Base::send_broadcast(rx.payload.data(), rx.payload.size());
-        } else { // Ethernet
-            // From other vehicles → deliver to local car (SHM)
-            Base::send_local(rx.payload.data(), rx.payload.size());
-        }
-    }
-};
