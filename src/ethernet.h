@@ -11,6 +11,8 @@
 // -----------------------------------------------------
 class Ethernet {
 public:
+    static constexpr std::size_t MTU = 1500; // Standard Ethernet payload
+    
     // Ethernet MAC address (6 bytes)
     class Address {
     public:

@@ -8,7 +8,7 @@
 #include "engine.h"
 #include "observer.h"
 
-// Forward decl to avoid circular problems if needed
+// Forward declaration to avoid circular dependencies
 class NIC;
 
 // -----------------------------------------------------
@@ -18,29 +18,13 @@ class NIC : public Ethernet,
             public Observed<NetFrame, NetProtocolType>
 {
 public:
-    NIC(Engine* e, Address addr) : engine(e), mac(addr) {
-        engine->bindNIC(this);
-    }
+    NIC(Engine* e, Address addr);
 
-    int send(Address dst, Protocol proto, const void* data, unsigned int size) {
-        Frame f;
-        f.src = mac;
-        f.dst = dst;
-        f.proto = proto;
-        f.size = size;
-        std::memcpy(f.data, data, size);
-        return engine->send(f);
-    }
+    int send(Address dst, Protocol proto, const void* data, unsigned int size);
 
-    // called by Engine when a frame is ready
-    void on_frame(const Frame& f) {
-        // copy, then notify all observers registered on this NIC
-        if(f.src == mac) return;
-        Frame* copy = new Frame(f);
-        this->notify(f.proto, copy);
-    }
+    void on_frame(const Frame& f);
 
-    const Address& address() const { return mac; }
+    const Address& address() const;
 
 private:
     Engine* engine;
