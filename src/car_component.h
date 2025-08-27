@@ -6,25 +6,30 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include <cerrno>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include <csignal>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/time.h>
 
 #include "communicator.h"
 #include "nic.h"
 #include "protocol.h"
 
+// One fork per component. Inside the child we spawn two threads:
+// - RX thread: blocks on receive() and calls on_receive()
+// - TX thread: runs on_tick() every tick_period_ms() if wants_tick() == true
+// Parent just manages the child PID.
+
 template <typename TNIC>
 class CarComponent {
 public:
-    using Proto        = Protocol<TNIC>;
-    using Endpoint     = typename Proto::Endpoint;
-    using Address      = typename Proto::Address;
-    using CommunicatorT= Communicator<TNIC>;
+    using Proto         = Protocol<TNIC>;
+    using Endpoint      = typename Proto::Endpoint;
+    using Address       = typename Proto::Address;
+    using CommunicatorT = Communicator<TNIC>;
 
     CarComponent(CommunicatorT* comm, uint16_t my_port, std::string name)
     : _comm(comm), _name(std::move(name)), _port(my_port) {
@@ -36,29 +41,47 @@ public:
 
     virtual ~CarComponent() { stop(); }
 
-    // create a child proccess that run the default rotine to send and receive data
+    // Parent forks; child runs the worker threads
     void start() {
-        if (_pid > 0) return;
+        if (_pid > 0) return;               // already running
         _pid = ::fork();
         if (_pid < 0) throw std::runtime_error("CarComponent: fork() failed");
 
-        if (_pid == 0) 
-        {
-            //child process rotine
-            install_handlers();
-            if (wants_tick()) arm_itimer(tick_period_ms());
+        if (_pid == 0) {
+            // -------- child process --------
+            install_sigterm();               // SIGTERM -> _running = false
+            _running.store(true);
 
-            while (running()) {
-                auto rx = _comm->receive();
-                if (tick_fired()) on_tick();
-                if (rx.to.port == _port) on_receive(rx);
-            }
+            std::thread rx_thread([this]{
+                while (true/* _running.load() */) {
+                    std::cout<<"waiting for data..\n";
+                    auto rx = _comm->receive();          // should unblock on SIGTERM (EINTR) if implemented
+                    std::cout<<"Received data!\n";
+                    //if (!_running.load()) break;
+                    /* if (rx.to.port == _port)  on_receive(rx);*/
+                    on_receive(rx);
+                    sleep(1000);
+                }
+            });
+
+            std::thread tx_thread;
+            //if (wants_tick()) {
+                tx_thread = std::thread([this]{
+                    while (true) {
+                        on_tick();
+                        sleep(tick_period_ms()/1000);
+                    }
+                });
+            //}
+
+            if (rx_thread.joinable()) rx_thread.join();
+            if (tx_thread.joinable()) tx_thread.join();
             _exit(0);
         }
-        
-        //parent process jump direct to here
+        // -------- parent returns here --------
     }
 
+    // Send SIGTERM and reap the child
     void stop() {
         if (_pid <= 0) return;
         ::kill(_pid, SIGTERM);
@@ -66,6 +89,7 @@ public:
         _pid = -1;
     }
 
+    // Convenience send helpers
     int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
     int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
     int send_local(const void* p, size_t n)    { return _comm->send(_to_local, p, n); }
@@ -75,9 +99,8 @@ public:
     const std::string& name() const { return _name; }
 
 protected:
-    //callback when receive data
+    // App-specific hooks
     virtual void on_receive(const typename CommunicatorT::Rx& rx) = 0;
-
     virtual bool wants_tick() const { return false; }
     virtual unsigned tick_period_ms() const { return 1000; }
     virtual void on_tick() {}
@@ -93,31 +116,21 @@ protected:
     uint16_t _port{0};
 
 private:
-    //control child options
-    static volatile std::sig_atomic_t& run_flag() { static volatile std::sig_atomic_t f=1; return f; }
-    static volatile std::sig_atomic_t& tick_flag(){ static volatile std::sig_atomic_t f=0; return f; }
-    static void on_sigterm(int){ run_flag() = 0; }
-    static void on_sigalrm(int){ tick_flag() = 1; }
-    static inline bool running(){ return run_flag()!=0; }
-    static inline bool tick_fired(){ if(tick_flag()){ tick_flag()=0; return true; } return false; }
-
-    static void install_handlers(){
+    // Minimal SIGTERM handler to stop child threads cleanly
+    static CarComponent*& self() { static CarComponent* s=nullptr; return s; }
+    static void sigterm_handler(int){ if (self()) self()->_running.store(false); }
+    void install_sigterm(){
+        self() = this;
         struct sigaction sa{};
+        sa.sa_handler = sigterm_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = 0;
-        sa.sa_handler = on_sigterm; ::sigaction(SIGTERM, &sa, nullptr);
-        sa.sa_handler = on_sigalrm; ::sigaction(SIGALRM, &sa, nullptr);
-    }
-
-    static void arm_itimer(unsigned ms){
-        itimerval it{};
-        it.it_value.tv_sec  = ms/1000; it.it_value.tv_usec  = (ms%1000)*1000;
-        it.it_interval      = it.it_value;
-        ::setitimer(ITIMER_REAL, &it, nullptr);
+        ::sigaction(SIGTERM, &sa, nullptr);
     }
 
 private:
-    pid_t _pid{-1};
+    pid_t _pid{-1};              // child PID (owned by parent)
+    std::atomic<bool> _running{false}; // only used in child
 };
 
 #endif // CAR_COMPONENT_H

@@ -50,16 +50,21 @@ public:
     // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
         if (to.mac == Address::BROADCAST()) {
+            //std::cout<<"Sending broadcast msg: "<<data<<"\n";
             Endpoint bto = to;
             bto.mac = Address::BROADCAST();
             return _eth->send(_local, bto, data, (unsigned)len);
         }
 
-        if (to.mac == _local.mac) return _shm->send(_local, to, data, (unsigned)len);
+        if (to.mac == _local.mac) 
+        {
+            return _shm->send(_local, to, data, (unsigned)len);
+        }
 
         // fallback send broadcast ethernet
         Endpoint bto = to;
         bto.mac = Address::BROADCAST();
+        //std::cout<<"Sending broadcast msg: "<<data<<"\n";
         return _eth->send(_local, bto, data, (unsigned)len);
     }
 

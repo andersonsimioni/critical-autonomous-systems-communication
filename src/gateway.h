@@ -17,6 +17,7 @@
 #include "nic.h"
 #include "protocol.h"
 #include "communicator.h"
+#include "components.h"
 
 static constexpr NetProtocolType ETYPE = 0x123;
 static constexpr uint16_t        PORT  = 123;
@@ -29,8 +30,6 @@ class Gateway {
 public:
 
     Gateway(){}
-
-    //virtual ~Gateway() { stop(); }
 
     int start() {
         try {
@@ -55,6 +54,9 @@ public:
             Protocol<NIC>::Endpoint toLocal { myMac, PORT };
             Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
 
+            PowertrainComponent<NIC> pc(&comm, PORT);
+            pc.start();
+
             // Thread de envio de teste:
             //   - to Ethernet (broadcast)
             //   - to SHM (for self MAC)
@@ -62,10 +64,10 @@ public:
                 int n = 0;
                 while (true) {
                     std::string via_eth = "hello-bcast-" + std::to_string(n);
-                    comm.send(toBcast, via_eth);
+                    //comm.send(toBcast, via_eth);
 
                     std::string via_shm = "ping-local-" + std::to_string(n);
-                    comm.send(toLocal, via_shm);
+                    //comm.send(toLocal, via_shm);
 
                     ++n;
                     std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -77,12 +79,17 @@ public:
             while (true) {
                 auto rx = comm.receive(); // bloqueante
                 std::string payload(rx.payload.begin(), rx.payload.end());
-                std::cout << "[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
+                /* std::cout << "[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
                         << rx.from.mac.str() << ":" << rx.from.port
                         << " -> " << rx.to.mac.str()   << ":" << rx.to.port
                         << "  len=" << rx.payload.size()
-                        << "  data=\"" << payload << "\"\n";
+                        << "  data=\"" << payload << "\"\n"; */
+                
+                std::cout<<"Gateway received data and repassing to components..\n";
+                comm.send(toLocal, payload);
             }
+
+            while (true) sleep(1000);
 
         } catch (const std::exception& e) {
             std::cerr << "Fatal: " << e.what() << "\n";

@@ -28,6 +28,7 @@ protected:
     void on_receive(const Rx& rx) override {
         // Example: accept commands addressed to this port (from gateway or others)
         auto s = Base::to_string(rx.payload);
+        std::cout<<"Received data: "<<s<<"\n";
     }
 
 private:

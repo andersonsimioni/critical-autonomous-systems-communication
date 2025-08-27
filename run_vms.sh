@@ -14,7 +14,7 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=5
+NUM_VMS=2
 
 # Loop to start VMs
 for i in $(seq 0 $((NUM_VMS-1))); do
