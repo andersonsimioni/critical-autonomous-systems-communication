@@ -136,10 +136,8 @@ void EngineEthernet::on_packet()
         if(plen > Ethernet::Frame::MAX_DATA) plen = Ethernet::Frame::MAX_DATA;
 
         Ethernet::Frame f;
-        f.src = Ethernet::Address({hdr.ether_shost[0],hdr.ether_shost[1],hdr.ether_shost[2],
-                                   hdr.ether_shost[3],hdr.ether_shost[4],hdr.ether_shost[5]});
-        f.dst = Ethernet::Address({hdr.ether_dhost[0],hdr.ether_dhost[1],hdr.ether_dhost[2],
-                                   hdr.ether_dhost[3],hdr.ether_dhost[4],hdr.ether_dhost[5]});
+        f.src = Ethernet::Address({hdr.ether_shost[0],hdr.ether_shost[1],hdr.ether_shost[2], hdr.ether_shost[3],hdr.ether_shost[4],hdr.ether_shost[5]});
+        f.dst = Ethernet::Address({hdr.ether_dhost[0],hdr.ether_dhost[1],hdr.ether_dhost[2], hdr.ether_dhost[3],hdr.ether_dhost[4],hdr.ether_dhost[5]});
         f.proto = proto;
         f.size = static_cast<unsigned>(plen);
         std::memcpy(f.data, buf + sizeof(hdr), plen);

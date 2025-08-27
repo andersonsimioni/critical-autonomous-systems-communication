@@ -1,6 +1,7 @@
 #pragma once
 
 #include "car_component.h"
+#include "utils.h"
 #include <cstdio>
 
 // ---- Powertrain ----
@@ -21,7 +22,7 @@ protected:
     void on_tick() override {
         _rpm = (_rpm + 300) % 6000;
         char msg[64];
-        std::snprintf(msg, sizeof(msg), "rpm=%u torque=%u", _rpm, 250u);
+        std::snprintf(msg, sizeof(msg), "time=%llu rpm=%u torque=%u", get_microseconds_now(), _rpm, 250u);
         Base::send_broadcast(msg, std::strlen(msg));
     }
 

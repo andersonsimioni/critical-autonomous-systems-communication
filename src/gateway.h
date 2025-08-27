@@ -18,6 +18,7 @@
 #include "protocol.h"
 #include "communicator.h"
 #include "components.h"
+#include "utils.h"
 
 static constexpr NetProtocolType ETYPE = 0x123;
 static constexpr uint16_t        PORT  = 123;
@@ -77,13 +78,15 @@ public:
 
             // Loop print origin (ETHERNET/SHM), endpoints e payload
             while (true) {
+                
                 auto rx = comm.receive(); // bloqueante
                 std::string payload(rx.payload.begin(), rx.payload.end());
-                /* std::cout << "[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
+                std::cout <<"[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
                         << rx.from.mac.str() << ":" << rx.from.port
                         << " -> " << rx.to.mac.str()   << ":" << rx.to.port
                         << "  len=" << rx.payload.size()
-                        << "  data=\"" << payload << "\"\n"; */
+                        << "  payload=\"" << payload << "\""
+                        << "  recv_time ="<<get_microseconds_now()<<"\n";
                 
                 std::cout<<"Gateway received data and repassing to components..\n";
                 comm.send(toLocal, payload);
