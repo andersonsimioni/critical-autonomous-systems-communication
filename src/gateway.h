@@ -86,7 +86,7 @@ public:
                         << " -> " << rx.to.mac.str()   << ":" << rx.to.port
                         << "  len=" << rx.payload.size()
                         << "  payload=\"" << payload << "\""
-                        << "  recv_time ="<<get_microseconds_now()<<"\n";
+                        << "  recv_time="<<get_microseconds_now()<<"\n";
                 
                 std::cout<<"Gateway received data and repassing to components..\n";
                 comm.send(toLocal, payload);
