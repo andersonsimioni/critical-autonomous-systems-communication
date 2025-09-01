@@ -15,7 +15,7 @@ SRC = $(wildcard src/*.cpp)
 OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
-all: clean x86 riscv clean_build cpio run_vms
+all: clean riscv clean_build cpio run_vms
 
 cpio:
 	@echo generating cpio...
@@ -25,11 +25,6 @@ cpio:
 run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
-
-x86: $(OBJ_X86)
-	@echo compiling for x86...
-	@mkdir -p bin
-	$(CXX_X86) $(OBJ_X86) -o bin/$(APP)-x86 $(LDFLAGS)
 
 build/x86/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
