@@ -20,7 +20,7 @@ all: clean x86 riscv clean_build cpio run_vms
 cpio:
 	@echo generating cpio...
 	@cp bin/main-riscv busybox/main
-	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
+	@(cd busybox && find ./main | cpio -o -H newc) > initramfs.cpio
 
 run_vms:
 	@echo running vms...
