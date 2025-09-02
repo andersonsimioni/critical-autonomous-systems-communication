@@ -14,7 +14,7 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=5
+NUM_VMS=2
 
 
 # Finds available terminal
@@ -42,6 +42,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
         qemu-system-riscv64 \
             -machine virt \
             -nographic \
+            -m 1024 \
             -kernel "$KERNEL" \
             -initrd "$INITRD" \
             -append "root=/dev/ram rw" \
@@ -53,6 +54,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
             qemu-system-riscv64 \
                 -machine virt \
                 -nographic \
+                -m 1024 \
                 -kernel \"$KERNEL\" \
                 -initrd \"$INITRD\" \
                 -append \"root=/dev/ram rw\" \

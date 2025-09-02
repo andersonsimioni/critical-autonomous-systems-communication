@@ -17,10 +17,24 @@ OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
 all: clean riscv clean_build cpio run_vms
 
+
+clean:
+	rm -rf build bin
+	@echo clean all
+
+riscv: $(OBJ_RISCV)
+	@echo compile for riscv64 now...
+	@mkdir -p bin
+	$(CXX_RISCV) $(OBJ_RISCV) -o bin/$(APP)-riscv $(LDFLAGS)
+
+clean_build:
+	rm -rf build
+	@echo clean build	
+
 cpio:
 	@echo generating cpio...
 	@cp bin/main-riscv busybox/main
-	@(cd busybox && find ./main | cpio -o -H newc) > initramfs.cpio
+	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
 run_vms:
 	@echo running vms...
@@ -31,22 +45,13 @@ build/x86/%.o: src/%.cpp
 	@echo cc $<
 	$(CXX_X86) $(CXXFLAGS) -c $< -o $@
 
-riscv: $(OBJ_RISCV)
-	@echo compile for riscv64 now...
-	@mkdir -p bin
-	$(CXX_RISCV) $(OBJ_RISCV) -o bin/$(APP)-riscv $(LDFLAGS)
-
 build/riscv/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	@echo cc $<
 	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
 
-clean_build:
-	rm -rf build
-	@echo clean build	
 
-clean:
-	rm -rf build bin
-	@echo clean all
+
+
 
 .PHONY: all x86 riscv clean help

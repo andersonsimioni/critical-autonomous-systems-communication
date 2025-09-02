@@ -17,7 +17,7 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
 // called by Engine when a frame is ready
 void NIC::on_frame(const Frame& f) {
     // Ignore frames sent by myself
-    if(f.src == mac) return;
+    // if(f.src == mac) return;
 
     // Copy frame and notify all observers registered on this NIC
     Frame* copy = new Frame(f);
