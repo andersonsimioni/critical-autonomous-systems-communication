@@ -1,14 +1,21 @@
 #!/bin/sh
+echo "Vai rodar mkdir /sys /proc"
 mkdir /sys /proc
+echo "rodou mkdir /sys /proc e vai rodar mount -t sysfs none /sys"
 mount -t sysfs none /sys
+echo "rodou mount -t sysfs none /sys e vai rodar mount -t devtmpfs none /dev"
 mount -t devtmpfs none /dev
+echo "rodou mount -t devtmpfs none /dev e vai rodar mount -t proc proc /proc"
 mount -t proc proc /proc
+echo "rodou mount -t proc proc /proc e vai rodar ip link set dev eth0 up "
 ip link set dev eth0 up 
 #exec /bin/sh
 #exec /main eth0 ping
 
 # Ler o ID da VM a partir do kernel cmdline
 ID_VM=$(grep -oP 'id=\K\d+' /proc/cmdline)
+
+echo "Vai rodar barreira e depois main"
 
 # Rodar a barreira e depois a aplicação crítica
 /barrier "$ID_VM" && exec /main eth0 ping
