@@ -45,7 +45,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
             -m 1024 \
             -kernel "$KERNEL" \
             -initrd "$INITRD" \
-            -append "root=/dev/ram rw" \
+            -append "root=/dev/ram rw id=$i" \
             -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
             -device virtio-net,id=eth0,netdev=vlan0,mac=$MAC &
     else
@@ -57,7 +57,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
                 -m 1024 \
                 -kernel \"$KERNEL\" \
                 -initrd \"$INITRD\" \
-                -append \"root=/dev/ram rw\" \
+                -append \"root=/dev/ram rw id=$i\" \
                 -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
                 -device virtio-net,id=eth0,netdev=vlan0,mac=$MAC;
             exec bash

@@ -11,6 +11,14 @@ LDFLAGS  = --static
 # find all source file
 SRC = $(wildcard src/*.cpp)
 
+# Separete binaries
+SRC_MAIN    = $(filter-out src/barrier.cpp, $(SRC))
+SRC_BARRIER = src/barrier.cpp
+
+OBJ_RISCV_MAIN    = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC_MAIN))
+OBJ_RISCV_BARRIER = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC_BARRIER))
+
+
 # objs for each arch
 OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
@@ -22,10 +30,11 @@ clean:
 	rm -rf build bin
 	@echo clean all
 
-riscv: $(OBJ_RISCV)
+riscv: $(OBJ_RISCV_MAIN) $(OBJ_RISCV_BARRIER)
 	@echo compile for riscv64 now...
 	@mkdir -p bin
-	$(CXX_RISCV) $(OBJ_RISCV) -o bin/$(APP)-riscv $(LDFLAGS)
+	$(CXX_RISCV) $(OBJ_RISCV_MAIN) -o bin/$(APP)-riscv $(LDFLAGS)
+	$(CXX_RISCV) $(OBJ_RISCV_BARRIER) -o bin/barrier-riscv $(LDFLAGS)
 
 clean_build:
 	rm -rf build
@@ -34,7 +43,9 @@ clean_build:
 cpio:
 	@echo generating cpio...
 	@cp bin/main-riscv busybox/main
+	@cp bin/barrier-riscv busybox/barrier
 	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
+
 
 run_vms:
 	@echo running vms...

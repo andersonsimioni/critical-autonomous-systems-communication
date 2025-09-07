@@ -5,4 +5,11 @@ mount -t devtmpfs none /dev
 mount -t proc proc /proc
 ip link set dev eth0 up 
 #exec /bin/sh
-exec /main eth0 ping
+#exec /main eth0 ping
+
+# Ler o ID da VM a partir do kernel cmdline
+ID_VM=$(grep -oP 'id=\K\d+' /proc/cmdline)
+
+# Rodar a barreira e depois a aplicação crítica
+/barrier "$ID_VM" && exec /main eth0 ping
+
