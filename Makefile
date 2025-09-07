@@ -20,7 +20,7 @@ OBJ_RISCV_BARRIER = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC_BARRIER))
 
 
 # objs for each arch
-OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
+#OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
 all: clean riscv clean_build cpio run_vms
@@ -46,7 +46,6 @@ cpio:
 	@cp bin/barrier-riscv busybox/barrier
 	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
-
 run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
@@ -60,9 +59,5 @@ build/riscv/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	@echo cc $<
 	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
-
-
-
-
 
 .PHONY: all x86 riscv clean help

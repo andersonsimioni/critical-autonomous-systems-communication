@@ -47,7 +47,7 @@ public:
             // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
             Communicator<NIC> comm(&protoEth, &protoShm, { myMac, PORT });
 
-            std::cout << "[*] Listening " << PORT
+            std::cout << "[*] Listening / escutando" << PORT
                     << " / EtherType 0x" << std::hex << (unsigned)ETYPE << std::dec
                     << "  MAC=" << myMac.str() << "\n";
 
