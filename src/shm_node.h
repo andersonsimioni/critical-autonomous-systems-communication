@@ -1,4 +1,6 @@
 #pragma once
+
+#include <unistd.h>
 #include <string>
 
 #ifndef SHM_NODE_H
@@ -26,28 +28,32 @@ typedef struct {
 
 class ShmNode
 {
-private:
-    bool using_bus;
+public:
     int nodes_count;
     bool is_master_node;
-    char* shared_memory_region_name;
+    char* shared_memory_region_name;    
+    bool using_bus;    
     SharedData* shared_data_ptr;
 
     void* initialize_shared_memory_region();
     bool initialize_sync_controls();
-    bool initialize_node();
+    bool initialize_receive_msg_thread();
 
-public:
+    
+
     ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count);
     
-    /// @brief Block execution to wait without busy-wait for new messages
-    /// @return Received message
-    std::string receive_msg();
+    virtual void on_receive_msg(int msg_len, char* msg)
+    {
+        printf("[%i] message arrived len = %i message = %s\n", getpid(), msg_len, msg);
+    }
 
     /// @brief Could block the execution if other node is using bus
     /// @param msg Message you want to send
     /// @return Operation result
-    bool send_msg(std::string msg);
+    bool send_msg(int msg_len, char* msg);
+
+    bool initialize_node();
 
     ~ShmNode();
 };
