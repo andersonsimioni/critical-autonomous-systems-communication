@@ -42,7 +42,8 @@ clean_build:
 
 cpio:
 	@echo generating cpio...
-	@cp bin/main-riscv busybox/main
+	@cp bin/main-riscv busybox/init
+	@chmod +x busybox/init
 	@cp bin/barrier-riscv busybox/barrier
 	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
