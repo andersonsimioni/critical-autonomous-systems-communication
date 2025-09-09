@@ -1,3 +1,5 @@
+//barrier novo
+
 #include <iostream>
 #include <cstring>
 #include <set>
@@ -58,7 +60,7 @@ void send_msg(int sockfd, const Msg& msg, const uint8_t src_mac[6], const uint8_
            (sockaddr*)&addr, sizeof(addr));
 }
 
-int main(int argc, char* argv[]) {
+/*int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Uso: " << argv[0] << " <ID_VM>\n";
         return 1;
@@ -133,4 +135,5 @@ int main(int argc, char* argv[]) {
 
     close(sockfd);
     return 0;
-}
+
+    }*/

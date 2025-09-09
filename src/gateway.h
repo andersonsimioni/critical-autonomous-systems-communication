@@ -8,6 +8,9 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <set>
+#include <exception>
+#include <unistd.h>
 
 #include "ethernet.h"
 #include "frame.h"
@@ -30,7 +33,9 @@ static constexpr uint16_t        PORT  = 123;
 class Gateway {
 public:
 
-    Gateway(){}
+    Gateway(int total_vms = 5)
+        : total_vms(total_vms) {}
+
 
     int start() {
         try {
@@ -47,14 +52,55 @@ public:
             // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
             Communicator<NIC> comm(&protoEth, &protoShm, { myMac, PORT });
 
-            std::cout << "[*] Listening / escutando" << PORT
-                    << " / EtherType 0x" << std::hex << (unsigned)ETYPE << std::dec
-                    << "  MAC=" << myMac.str() << "\n";
+            //std::cout << "[*] Listening / escutando" << PORT
+            //        << " / EtherType 0x" << std::hex << (unsigned)ETYPE << std::dec
+             //       << "  MAC=" << myMac.str() << "\n";
 
             Protocol<NIC>::Endpoint me      { myMac, PORT };
             Protocol<NIC>::Endpoint toLocal { myMac, PORT };
             Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
 
+            std::cout << "[*] Gateway iniciado. Esperando sincronização...\n";
+            // --- Etapa 1: sincronização inicial ---
+            std::set<std::string> ready_nodes;
+            ready_nodes.insert(myMac.str()); // conta a si mesmo
+            bool started = false;
+
+            // envia READY
+            comm.send(toBcast, "READY");
+            std::cout << "[*] Gateway enviou READY\n";
+
+            while (!started) {
+                std::cout << "[*] VM AGUARDA COMM \n";
+                auto rx = comm.receive(); //bloqueante
+                std::string payload(rx.payload.begin(), rx.payload.end());
+
+                std::cout <<"[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
+                        << rx.from.mac.str() << ":" << rx.from.port
+                        << " -> " << rx.to.mac.str()   << ":" << rx.to.port
+                        << "  len=" << rx.payload.size()
+                        << "  payload=\"" << payload << "\""
+                        << "  recv_time="<<get_microseconds_now()<<"\n";
+
+                if (payload == "READY") {
+                    ready_nodes.insert(rx.from.mac.str());
+                    std::cout << "[SYNC] Recebido READY de " << rx.from.mac.str()
+                              << " (" << ready_nodes.size() << "/" << total_vms << ")\n";
+
+                    // Se este nó foi o primeiro a ver todos, dispara o "GO"
+                    if ((int)ready_nodes.size() == total_vms) {
+                        std::cout << "[SYNC] Todos prontos. Enviando GO...\n";
+                        comm.send(toBcast, "GO");
+                    }
+                } 
+                else if (payload == "GO") {
+                    std::cout << "[SYNC] Recebido GO. Sincronização concluída.\n";
+                    started = true;
+                }
+            }
+    
+
+            // --- Etapa 2: inicia componentes ---
             PowertrainComponent<NIC> pc(&comm, PORT);
             pc.start();
 
@@ -106,6 +152,8 @@ public:
     int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
     int send_local(const void* p, size_t n)    { return _comm->send(_to_local, p, n); }
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); } */
+private:
+    int total_vms;
 };
 
 #endif // GATEWAY_COMPONENT_H

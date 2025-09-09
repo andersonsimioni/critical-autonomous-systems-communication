@@ -16,6 +16,9 @@ MCAST_PORT="1234"
 # VMs
 NUM_VMS=2
 
+# Wait time between VM starts (in seconds)
+WAIT_TIME=4
+
 
 # Finds available terminal
 if command -v xterm &>/dev/null; then
@@ -63,6 +66,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
             exec bash
         " &
     fi
+    sleep $WAIT_TIME
 done
 
 # Wait until every VM has started
