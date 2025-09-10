@@ -49,7 +49,7 @@ public:
         if(pid == 0 || is_master_node)
         {
             EngineEthernet engEth("eth0");
-            EngineShm engShm("SHARED REGION", is_master_node, nodes_count);
+            EngineShm engShm("/shared_region_23984293", is_master_node, nodes_count);
             Ethernet::Address myMac = engEth.mac();
             
             NIC nic(&engEth, &engShm, myMac);

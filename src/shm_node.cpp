@@ -20,13 +20,14 @@
 
 void* ShmNode::initialize_shared_memory_region()
 {
-    int shm_key = 56468;
-    std::string region_name = this->shared_memory_region_name + std::to_string(shm_key);
-
     printf("creating/opening shared memory region..\n");
-    int shm_id = shm_open(region_name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    int shm_id = shm_open(this->shared_memory_region_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     
-    if(ftruncate(shm_id, sizeof(SharedData)) == -1) exit(-1);
+    if(ftruncate(shm_id, sizeof(SharedData)) == -1)
+    {
+        printf("error on create/open shared memory region!\n");
+        exit(-1);
+    }
 
     printf("mapping shared memory region..\n");
     this->shared_data_ptr = (SharedData*)mmap(NULL, sizeof(SharedData), PROT_READ | PROT_WRITE, MAP_SHARED, shm_id, 0);

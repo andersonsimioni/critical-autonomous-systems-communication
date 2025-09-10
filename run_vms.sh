@@ -14,7 +14,7 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=2
+NUM_VMS=1
 
 
 # Finds available terminal
