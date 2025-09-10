@@ -22,6 +22,9 @@
 #include "nic.h"
 #include "protocol.h"
 
+static constexpr NetProtocolType ETYPE = 0x123;
+static constexpr uint16_t PORT = 123;
+
 // One fork per component. Inside the child we spawn two threads:
 // - RX thread: blocks on receive() and calls on_receive()
 // - TX thread: runs on_tick() every tick_period_ms() if wants_tick() == true
@@ -61,7 +64,7 @@ public:
             _to_local = toLocal;
 
             // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
-            _comm = Communicator<NIC>(&proto, &proto, { myMac, PORT });
+            _comm = new Communicator<NIC>(&proto, me);
 
             engShm.start();
         }
@@ -96,7 +99,7 @@ protected:
     }
 
 protected:
-    CommunicatorT* _comm;
+    Communicator<NIC>* _comm;
     Endpoint _local{}, _to_bcast{}, _to_local{};
     std::string _name;
     uint16_t _port{0};

@@ -1,6 +1,7 @@
 #include "gateway.h"
+#include "components.h"
 
 int main(int argc, char** argv) {
-    Gateway g;
-    g.start();
+    Gateway<NIC> g(PORT);
+    g.start(true, 0);
 }

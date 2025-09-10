@@ -4,7 +4,7 @@
 #include "utils.h"
 #include <cstdio>
 
-#define PORT 123
+
 
 // ---- Powertrain ----
 // Periodically publishes RPM to broadcast (Ethernet) and listens for control.

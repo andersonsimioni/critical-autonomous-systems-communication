@@ -1,4 +1,5 @@
-#include "components.h"
+/* #include "components.h"
+#include "gate"
 
 void initialize_all_components()
 {
@@ -8,4 +9,4 @@ void initialize_all_components()
     car_components.push_back(PowertrainComponent<NIC>(PORT));
 
     for (int i = 0; i < car_components.size(); i++) car_components.at(i).start(i==0, car_components.size());
-}
+} */

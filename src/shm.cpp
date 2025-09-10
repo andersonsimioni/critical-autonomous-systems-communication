@@ -1,4 +1,4 @@
-// mini_bc.cpp — POSIX shm + semáforos nomeados. Enxuto, com bc_send/bc_recv.
+/* // mini_bc.cpp — POSIX shm + semáforos nomeados. Enxuto, com bc_send/bc_recv.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -57,3 +57,4 @@ int main(int arg_c, char** arg_v){
     //shm_unlink(shm_name);    
     return 0;
 }
+ */
