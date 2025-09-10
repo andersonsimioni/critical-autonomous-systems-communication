@@ -28,44 +28,21 @@ public:
         ChannelOrigin origin;
     };
 
-    Communicator(ProtocolT* protoEth, ProtocolT* protoShm, const Endpoint& local)
-        : _eth(protoEth), _shm(protoShm), _local(local)
+    Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
-        if(!_eth || !_shm) throw std::runtime_error("Communicator: null protocol");
-
-        _ethObs = new PortObserverImpl(this, ChannelOrigin::Ethernet, local.port);
-        _shmObs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, local.port);
-
-        _eth->attach(_ethObs);
-        _shm->attach(_shmObs);
+        _obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, local.port);
+        _protocol->attach(_obs);
     }
 
     ~Communicator() {
-        if(_eth && _ethObs) _eth->detach(_ethObs);
-        if(_shm && _shmObs) _shm->detach(_shmObs);
-        delete _ethObs; delete _shmObs;
+        if(_protocol && _obs) _protocol->detach(_obs);
+        delete _obs;
     }
 
     // route the send
     // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
-        if (to.mac == Address::BROADCAST()) {
-            //std::cout<<"Sending broadcast msg: "<<data<<"\n";
-            Endpoint bto = to;
-            bto.mac = Address::BROADCAST();
-            return _eth->send(_local, bto, data, (unsigned)len);
-        }
-
-        if (to.mac == _local.mac) 
-        {
-            return _shm->send(_local, to, data, (unsigned)len);
-        }
-
-        // fallback send broadcast ethernet
-        Endpoint bto = to;
-        bto.mac = Address::BROADCAST();
-        //std::cout<<"Sending broadcast msg: "<<data<<"\n";
-        return _eth->send(_local, bto, data, (unsigned)len);
+        return _protocol->send(_local, to, data, (unsigned)len);
     }
 
     int send(const Endpoint& to, const std::string& s) {
@@ -93,11 +70,10 @@ public:
 private:
     class PortObserverImpl : public ProtocolT::PortObserver {
     public:
-        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port)
-            : _owner(owner), _origin(origin), _port(port) {}
+        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port) : _owner(owner), _origin(origin), _port(port) {}
         uint16_t port() const override { return _port; }
-        void on_packet(const Endpoint& from, const Endpoint& to,
-                       const uint8_t* data, unsigned len) override {
+
+        void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len) override {
             Communicator::Rx rx;
             rx.from = from;
             rx.to = to;
@@ -118,12 +94,10 @@ private:
     }
 
 private:
-    ProtocolT* _eth{nullptr};
-    ProtocolT* _shm{nullptr};
+    ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
 
-    PortObserverImpl* _ethObs{nullptr};
-    PortObserverImpl* _shmObs{nullptr};
+    PortObserverImpl* _obs{nullptr};
 
     std::mutex              _mtx;
     std::condition_variable _cv;

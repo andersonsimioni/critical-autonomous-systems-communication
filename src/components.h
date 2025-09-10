@@ -4,6 +4,8 @@
 #include "utils.h"
 #include <cstdio>
 
+#define PORT 123
+
 // ---- Powertrain ----
 // Periodically publishes RPM to broadcast (Ethernet) and listens for control.
 
@@ -12,8 +14,7 @@ class PowertrainComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
-    PowertrainComponent(typename Base::CommunicatorT* comm, uint16_t port)
-    : Base(comm, port, "Powertrain") {}
+    PowertrainComponent(uint16_t port) : Base(port, "Powertrain") {}
 
 protected:
     bool wants_tick() const override { return true; }
@@ -44,8 +45,8 @@ class BrakeComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
-    BrakeComponent(typename Base::CommunicatorT* comm, uint16_t port)
-    : Base(comm, port, "Brake") {}
+    BrakeComponent(uint16_t port)
+    : Base(port, "Brake") {}
 
 protected:
     void on_receive(const Rx& rx) override {

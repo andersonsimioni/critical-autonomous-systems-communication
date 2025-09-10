@@ -14,11 +14,10 @@ class NIC;
 // -----------------------------------------------------
 // NIC as an Observed subject of frames
 // -----------------------------------------------------
-class NIC : public Ethernet,
-            public Observed<NetFrame, NetProtocolType>
+class NIC : public Ethernet, public Observed<NetFrame, NetProtocolType>
 {
 public:
-    NIC(Engine* e, Address addr);
+    NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr);
 
     int send(Address dst, Protocol proto, const void* data, unsigned int size);
 
@@ -27,7 +26,8 @@ public:
     const Address& address() const;
 
 private:
-    Engine* engine;
+    Engine* ethernet_engine;
+    Engine* shm_engine;
     Address mac;
 };
 

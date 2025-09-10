@@ -14,6 +14,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "engine.h"
+#include "ethernet.h"
+#include "engine_ethernet.h"
+#include "engine_shm.h"
 #include "communicator.h"
 #include "nic.h"
 #include "protocol.h"
@@ -31,54 +35,36 @@ public:
     using Address       = typename Proto::Address;
     using CommunicatorT = Communicator<TNIC>;
 
-    CarComponent(CommunicatorT* comm, uint16_t my_port, std::string name)
-    : _comm(comm), _name(std::move(name)), _port(my_port) {
-        if(!_comm) throw std::runtime_error("CarComponent: null Communicator");
-        _local    = _comm->local();
-        _to_bcast = Endpoint{ Address::BROADCAST(), _port };
-        _to_local = Endpoint{ _local.mac, _port };
-    }
+    CarComponent(uint16_t my_port, std::string name) : _name(std::move(name)), _port(my_port) {}
 
     virtual ~CarComponent() { stop(); }
 
     // Parent forks; child runs the worker threads
-    void start() {
-        if (_pid > 0) return;               // already running
-        _pid = ::fork();
-        if (_pid < 0) throw std::runtime_error("CarComponent: fork() failed");
+    virtual void start(bool is_master_node, int nodes_count) {
+        int pid = 0;
+        if(!is_master_node) pid = fork();
+        if(pid == 0 || is_master_node)
+        {
+            EngineEthernet engEth("eth0");
+            EngineShm engShm("SHARED REGION", is_master_node, nodes_count);
+            Ethernet::Address myMac = engEth.mac();
+            
+            NIC nic(&engEth, &engShm, myMac);
+            Protocol<NIC> proto(&nic, ETYPE);
 
-        if (_pid == 0) {
-            // -------- child process --------
-            install_sigterm();               // SIGTERM -> _running = false
-            _running.store(true);
+            Protocol<NIC>::Endpoint me      { myMac, PORT };
+            Protocol<NIC>::Endpoint toLocal { myMac, PORT };
+            Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
+            
+            _local    = _comm->local();
+            _to_bcast = toBcast;
+            _to_local = toLocal;
 
-            std::thread rx_thread([this]{
-                while (true/* _running.load() */) {
-                    std::cout<<"waiting for data..\n";
-                    auto rx = _comm->receive();          // should unblock on SIGTERM (EINTR) if implemented
-                    std::cout<<"Received data!\n";
-                    //if (!_running.load()) break;
-                    /* if (rx.to.port == _port)  on_receive(rx);*/
-                    on_receive(rx);
-                    sleep(1000);
-                }
-            });
+            // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
+            _comm = Communicator<NIC>(&proto, &proto, { myMac, PORT });
 
-            std::thread tx_thread;
-            //if (wants_tick()) {
-                tx_thread = std::thread([this]{
-                    while (true) {
-                        on_tick();
-                        sleep(tick_period_ms()/1000);
-                    }
-                });
-            //}
-
-            if (rx_thread.joinable()) rx_thread.join();
-            if (tx_thread.joinable()) tx_thread.join();
-            _exit(0);
+            engShm.start();
         }
-        // -------- parent returns here --------
     }
 
     // Send SIGTERM and reap the child

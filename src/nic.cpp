@@ -1,7 +1,8 @@
 #include "nic.h"
 
-NIC::NIC(Engine* e, Address addr) : engine(e), mac(addr) {
-    engine->bindNIC(this);
+NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_engine(ethernet_engine), shm_engine(shm_engine), mac(addr) {
+    ethernet_engine->bindNIC(this);
+    shm_engine->bindNIC(this);
 }
 
 int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) {
@@ -11,7 +12,8 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     f.proto = proto;
     f.size = size;
     std::memcpy(f.data, data, size);
-    return engine->send(f);
+
+    return dst.str() == this->address().str() ? shm_engine->send(f) : ethernet_engine->send(f);
 }
 
 // called by Engine when a frame is ready
