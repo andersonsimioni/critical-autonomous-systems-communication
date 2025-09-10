@@ -42,32 +42,49 @@ public:
 
     virtual ~CarComponent() { stop(); }
 
+    virtual void initialize_communicator(bool is_master_node, int nodes_count)
+    {
+        printf("initializing communicator..\n");
+
+        EngineEthernet engEth("eth0");
+        EngineShm engShm("/shared_region_23984293", is_master_node, nodes_count);
+        Ethernet::Address myMac = engEth.mac();
+
+        NIC nic(&engEth, &engShm, &myMac);
+        Protocol<NIC> proto(&nic, ETYPE);
+
+        Protocol<NIC>::Endpoint me      { myMac, PORT };
+        Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
+
+        _local    = me;
+        _to_bcast = toBcast;
+        
+        // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
+        _comm = new Communicator<NIC>(&proto, me);
+
+        engShm.start();
+        if(is_master_node) engEth.start();
+
+        printf("NIC MAC ON INIT COMP = %d %d %d %d %d %d\n", nic.mac.addr[0], nic.mac.addr[1], nic.mac.addr[2], nic.mac.addr[3], nic.mac.addr[4], nic.mac.addr[5]);
+        myMac.addr[0] = 99;
+        printf("NIC MAC ON INIT COMP AFTER DELETE = %d %d %d %d %d %d\n", nic.mac.addr[0], nic.mac.addr[1], nic.mac.addr[2], nic.mac.addr[3], nic.mac.addr[4], nic.mac.addr[5]);
+    }
+
+    virtual void default_rotine()
+    {
+        printf("[CAR COMPONENT][%s] running..\n", this->name());
+        while (true)
+        {
+            auto msg = this->_comm->receive();
+            this->_comm->print_rx(msg);
+        }
+    }
+
     // Parent forks; child runs the worker threads
     virtual void start(bool is_master_node, int nodes_count) {
-        int pid = 0;
-        if(!is_master_node) pid = fork();
-        if(pid == 0 || is_master_node)
-        {
-            EngineEthernet engEth("eth0");
-            EngineShm engShm("/shared_region_23984293", is_master_node, nodes_count);
-            Ethernet::Address myMac = engEth.mac();
-            
-            NIC nic(&engEth, &engShm, myMac);
-            Protocol<NIC> proto(&nic, ETYPE);
-
-            Protocol<NIC>::Endpoint me      { myMac, PORT };
-            Protocol<NIC>::Endpoint toLocal { myMac, PORT };
-            Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
-            
-            _local    = _comm->local();
-            _to_bcast = toBcast;
-            _to_local = toLocal;
-
-            // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
-            _comm = new Communicator<NIC>(&proto, me);
-
-            engShm.start();
-        }
+        printf("starting car component base..\n");
+        initialize_communicator(is_master_node, nodes_count);
+        default_rotine();
     }
 
     // Send SIGTERM and reap the child
@@ -81,7 +98,7 @@ public:
     // Convenience send helpers
     int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
     int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
-    int send_local(const void* p, size_t n)    { return _comm->send(_to_local, p, n); }
+    int send_local(const void* p, size_t n)    { return _comm->send(_local, p, n); }
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
 
     uint16_t port() const { return _port; }
@@ -98,9 +115,10 @@ protected:
         return {v.begin(), v.end()};
     }
 
-protected:
+public:
+//protected:
     Communicator<NIC>* _comm;
-    Endpoint _local{}, _to_bcast{}, _to_local{};
+    Endpoint _local{}, _to_bcast{};
     std::string _name;
     uint16_t _port{0};
 

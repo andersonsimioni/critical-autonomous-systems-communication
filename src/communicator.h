@@ -39,9 +39,15 @@ public:
         delete _obs;
     }
 
+    void print_rx(const Rx& rx) {
+        std::string s(rx.payload.begin(), rx.payload.end());
+        std::cout << s << std::endl;
+    }
+
     // route the send
     // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
+        printf("NIC MAC ON COMMUNICATOR = %d %d %d %d %d %d\n", _protocol->nic->mac.addr[0], _protocol->nic->mac.addr[1], _protocol->nic->mac.addr[2], _protocol->nic->mac.addr[3], _protocol->nic->mac.addr[4], _protocol->nic->mac.addr[5]);
         return _protocol->send(_local, to, data, (unsigned)len);
     }
 
@@ -93,7 +99,8 @@ private:
         _cv.notify_one();
     }
 
-private:
+//private:
+public:
     ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
 

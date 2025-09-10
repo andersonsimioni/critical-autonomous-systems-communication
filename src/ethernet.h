@@ -17,6 +17,7 @@ public:
     class Address {
     public:
         static const int LENGTH = 6;
+        std::array<uint8_t,LENGTH> addr;
         static Address BROADCAST() { return Address({0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}); }
 
         Address() { addr.fill(0); }
@@ -30,9 +31,6 @@ public:
             std::snprintf(buf,sizeof(buf),"%02X:%02X:%02X:%02X:%02X:%02X", addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
             return std::string(buf);
         }
-
-    private:
-        std::array<uint8_t,LENGTH> addr;
     };
 
     // Ethernet protocol type (16 bits)

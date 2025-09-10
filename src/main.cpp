@@ -1,8 +1,6 @@
-#include "gateway.h"
-#include "components.h"
+#include "car.h"
 
 int main(int argc, char** argv) {
-    Gateway<NIC> g(PORT);
-    g.start(true, 1);
-    while (true) sleep(1);
+    Car* my_car = new Car();
+    my_car->start();
 }
