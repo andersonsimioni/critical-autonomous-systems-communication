@@ -22,16 +22,23 @@ public:
     using Address = Ethernet::Address;
 
     struct Rx {
-        Endpoint      from;
-        Endpoint      to;
+        typename Protocol<TNIC>::Endpoint      from;
+        typename Protocol<TNIC>::Endpoint      to;
         std::vector<uint8_t> payload;
         ChannelOrigin origin;
     };
 
+    /// @brief Use -1 for observe all ports
+    /// @param port 
+    void set_up_port_observer(uint16_t port)
+    {
+        _obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
+        _protocol->attach(_obs);
+    }
+
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
-        _obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, local.port);
-        _protocol->attach(_obs);
+        set_up_port_observer(local.port);
     }
 
     ~Communicator() {
@@ -47,7 +54,6 @@ public:
     // route the send
     // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
-        printf("NIC MAC ON COMMUNICATOR = %d %d %d %d %d %d\n", _protocol->nic->mac.addr[0], _protocol->nic->mac.addr[1], _protocol->nic->mac.addr[2], _protocol->nic->mac.addr[3], _protocol->nic->mac.addr[4], _protocol->nic->mac.addr[5]);
         return _protocol->send(_local, to, data, (unsigned)len);
     }
 
@@ -85,6 +91,8 @@ private:
             rx.to = to;
             rx.payload.assign(data, data+len);
             rx.origin = _origin;
+            
+            _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
         }
     private:
@@ -109,4 +117,17 @@ public:
     std::mutex              _mtx;
     std::condition_variable _cv;
     std::queue<Rx>          _queue;
+
+private:
+    Observed<Rx, uint16_t> observed_;
+    Rx scratch_;
+
+public:
+
+    void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
+    void detach(Observer<Rx, uint16_t>* o)  { observed_.detach(o);  }
+    void notify(const Rx& rx, uint16_t port = 0) {
+        scratch_ = rx;
+        observed_.notify(port, &scratch_);
+    }
 };

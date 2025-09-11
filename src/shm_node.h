@@ -29,19 +29,27 @@ typedef struct {
 class ShmNode
 {
 public:
+    pid_t pid;   
+
     int nodes_count;
     bool is_master_node;
     char* shared_memory_region_name;    
     bool using_bus;    
+    bool log;
+    
     SharedData* shared_data_ptr;
 
     void* initialize_shared_memory_region();
     bool initialize_sync_controls();
     bool initialize_receive_msg_thread();
 
-    
+    void Log(const char* msg)
+    {
+        if (!this->log) return;
+        printf(msg);
+    }
 
-    ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count);
+    ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log);
     
     virtual void on_receive_msg(int msg_len, char* msg)
     {

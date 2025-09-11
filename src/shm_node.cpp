@@ -33,7 +33,11 @@ void* ShmNode::initialize_shared_memory_region()
     this->shared_data_ptr = (SharedData*)mmap(NULL, sizeof(SharedData), PROT_READ | PROT_WRITE, MAP_SHARED, shm_id, 0);
     if (this->shared_data_ptr == MAP_FAILED) exit(-1);
 
-    if(this->is_master_node) memset(this->shared_data_ptr, 0, sizeof(SharedData));
+    if(this->is_master_node)
+    {
+        memset(this->shared_data_ptr, 0, sizeof(SharedData));
+        this->shared_data_ptr->parent_pid = getpid();
+    }
 
     return this->shared_data_ptr;
 }
@@ -76,13 +80,14 @@ void* receive_msg_rotine(void* args)
     {
         //sleep(1);continue;
 
-        //printf("waiting messages..\n"); 
+        printf("waiting messages..\n"); 
         pthread_mutex_lock(&s->new_msg_cond_mtx);
         while(!s->msg_available) pthread_cond_wait(&s->new_msg_cond, &s->new_msg_cond_mtx);
         pthread_mutex_unlock(&s->new_msg_cond_mtx);
+
         if(node->using_bus) continue;
         
-        printf("new message arrived!\n");
+        printf("[%d] [%d] new message arrived!\n", s->parent_pid, node->pid);
         char* msg = (char*)malloc(s->msg_len);
         memcpy(msg, s->bus, s->msg_len);
         
@@ -115,7 +120,7 @@ bool ShmNode::send_msg(int msg_len, char* msg)
     printf("sending message: %s\n", msg);
     printf("locking bus..\n");
     pthread_mutex_lock(&this->shared_data_ptr->bus_mtx);
-    using_bus = true;
+    this->using_bus = true;
 
     printf("writing message..\n");
     memset(this->shared_data_ptr->bus, 0, PAYLOAD);
@@ -138,19 +143,21 @@ bool ShmNode::send_msg(int msg_len, char* msg)
     this->shared_data_ptr->msg_available = false;
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
 
-    using_bus = false;
+    this->using_bus = false;
     printf("unlocking bus..\n");
     pthread_mutex_unlock(&this->shared_data_ptr->bus_mtx);
 
     return true;
 }
 
-ShmNode::ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count) {
+ShmNode::ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log) {
     this->shared_memory_region_name = _shared_memory_region_name;
     this->is_master_node = _is_master_node;
     this->nodes_count = _nodes_count;
     this->using_bus = false;
     this->shared_data_ptr = nullptr;
+    this->log = log;
+    this->pid = getpid();
 }
 
 ShmNode::~ShmNode() {}

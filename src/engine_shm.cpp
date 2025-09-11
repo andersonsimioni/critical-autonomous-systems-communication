@@ -2,7 +2,7 @@
 #include <cstdio>
 
 EngineShm::EngineShm(char* shm_region_name, bool is_master, int nodes)
-: ShmNode(shm_region_name, is_master, nodes), _shm_name(shm_region_name), _is_master(is_master), _nodes(nodes)
+: ShmNode(shm_region_name, is_master, nodes, false), _shm_name(shm_region_name), _is_master(is_master), _nodes(nodes)
 {
     // do not initialize here, initialize on start() after create all nodes..
     // IMPORTANT: start the master node FIRST!!
@@ -68,10 +68,10 @@ void EngineShm::on_receive_msg(int msg_len, char* msg) {
         return;
     }
 
-    if (nic) {
+    if (this->nic) {
         Ethernet::Frame f{};
         if (deserialize_frame(msg, static_cast<size_t>(msg_len), f)) {
-            static_cast<NIC*>(nic)->on_frame(f);
+            static_cast<NIC*>(this->nic)->on_frame(f);
             return;
         }
     }

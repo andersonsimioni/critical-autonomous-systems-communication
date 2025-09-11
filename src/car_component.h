@@ -31,16 +31,19 @@ static constexpr uint16_t PORT = 123;
 // Parent just manages the child PID.
 
 template <typename TNIC>
-class CarComponent {
+class CarComponent : public Observer<typename Communicator<TNIC>::Rx, uint16_t> {
 public:
     using Proto         = Protocol<TNIC>;
     using Endpoint      = typename Proto::Endpoint;
     using Address       = typename Proto::Address;
     using CommunicatorT = Communicator<TNIC>;
+    using Rx = typename CommunicatorT::Rx;
 
     CarComponent(uint16_t my_port, std::string name) : _name(std::move(name)), _port(my_port) {}
 
     virtual ~CarComponent() { stop(); }
+
+    void update(uint16_t port, Rx* rx) override { on_receive(*rx); }
 
     void on_tick_loop()
     {
@@ -51,41 +54,29 @@ public:
         }
     }
 
-    static void* receive_msg_thread_rotine(void* args)
-    {
-        //CarComponent* creator = (CarComponent*)args;
-        while (true)
-        {
-            sleep(1);
-            //auto msg = creator->_comm->receive(); //blocking..
-            //creator->on_receive(msg);
-        }
-    }
-
     virtual void initialize_communicator(bool is_master_node, int nodes_count)
     {
         printf("initializing communicator..\n");
 
-        _ethernet_engine = new  EngineEthernet("eth0");
-        _shm_engine = new EngineShm("/shared_region_23984293", is_master_node, nodes_count);
-        _my_mac = _ethernet_engine->mac();
+        this->_ethernet_engine = new  EngineEthernet("eth0");
+        this->_shm_engine = new EngineShm("/shared_region_23984293", is_master_node, nodes_count);
+        this->_my_mac = this->_ethernet_engine->mac();
 
-        _nic = new NIC(_ethernet_engine, _shm_engine, _my_mac);
-        _protocol = new Protocol<NIC>(_nic, ETYPE);
+        this->_nic = new NIC(this->_ethernet_engine, this->_shm_engine, this->_my_mac);
+        this->_protocol = new Protocol<NIC>(_nic, ETYPE);
 
-        Protocol<NIC>::Endpoint me      { _my_mac, PORT };
+        Protocol<NIC>::Endpoint me      { this->_my_mac, PORT };
         Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
 
-        _local    = me;
-        _to_bcast = toBcast;
+        this->_local    = me;
+        this->_to_bcast = toBcast;
         
         // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
-        _comm = new Communicator<NIC>(_protocol, me);
+        this->_comm = new Communicator<NIC>(_protocol, me);
+        this->_comm->set_up_port_observer(-1); 
 
         _ethernet_engine->start();
-        if(is_master_node) _shm_engine->start();
-
-        //pthread_create(this->receive_msg_thread, NULL, CarComponent::receive_msg_thread_rotine, (void*)this);
+        _shm_engine->start();
     }
 
     // Parent forks; child runs the worker threads
