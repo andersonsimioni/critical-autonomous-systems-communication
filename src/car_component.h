@@ -46,28 +46,26 @@ public:
     {
         printf("initializing communicator..\n");
 
-        EngineEthernet engEth("eth0");
-        EngineShm engShm("/shared_region_23984293", is_master_node, nodes_count);
-        Ethernet::Address myMac = engEth.mac();
+        _ethernet_engine = new  EngineEthernet("eth0");
+        _shm_engine = new EngineShm("/shared_region_23984293", is_master_node, nodes_count);
+        _my_mac = _ethernet_engine->mac();
 
-        NIC nic(&engEth, &engShm, &myMac);
-        Protocol<NIC> proto(&nic, ETYPE);
+        _nic = new NIC(_ethernet_engine, _shm_engine, _my_mac);
+        _protocol = new Protocol<NIC>(_nic, ETYPE);
 
-        Protocol<NIC>::Endpoint me      { myMac, PORT };
+        Protocol<NIC>::Endpoint me      { _my_mac, PORT };
         Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
 
         _local    = me;
         _to_bcast = toBcast;
         
         // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
-        _comm = new Communicator<NIC>(&proto, me);
+        _comm = new Communicator<NIC>(_protocol, me);
 
-        engShm.start();
-        if(is_master_node) engEth.start();
+        _ethernet_engine->start();
+        if(is_master_node) _shm_engine->start();
 
-        printf("NIC MAC ON INIT COMP = %d %d %d %d %d %d\n", nic.mac.addr[0], nic.mac.addr[1], nic.mac.addr[2], nic.mac.addr[3], nic.mac.addr[4], nic.mac.addr[5]);
-        myMac.addr[0] = 99;
-        printf("NIC MAC ON INIT COMP AFTER DELETE = %d %d %d %d %d %d\n", nic.mac.addr[0], nic.mac.addr[1], nic.mac.addr[2], nic.mac.addr[3], nic.mac.addr[4], nic.mac.addr[5]);
+        printf("NIC MAC ON INIT COMP = %d %d %d %d %d %d\n", _nic->mac.addr[0], _nic->mac.addr[1], _nic->mac.addr[2], _nic->mac.addr[3], _nic->mac.addr[4], _nic->mac.addr[5]);
     }
 
     virtual void default_rotine()
@@ -117,7 +115,13 @@ protected:
 
 public:
 //protected:
+    Ethernet::Address _my_mac;
+    EngineShm* _shm_engine;
+    EngineEthernet* _ethernet_engine;
+    NIC* _nic;
+    Protocol<NIC>* _protocol;
     Communicator<NIC>* _comm;
+
     Endpoint _local{}, _to_bcast{};
     std::string _name;
     uint16_t _port{0};

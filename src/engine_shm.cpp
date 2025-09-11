@@ -15,9 +15,12 @@ int EngineShm::start() {
 }
 
 int EngineShm::send(const Ethernet::Frame& frame) {
+    printf("serializing SHM Ethernet Frame..\n");
     auto blob = serialize_frame(frame);
-    if (blob.empty()) return -1;
-    if (blob.size() > PAYLOAD) return -2;
+    if (blob.empty()) { printf("SHM Ethernet Frame EMPTY!\n"); return -1; }
+    if (blob.size() > PAYLOAD) { printf("SHM Ethernet Frame REACHED PAYLOAD LIMIT!\n"); return -2; }
+
+    printf("sending SHM Ethernet Frame..\n");
     return ShmNode::send_msg(static_cast<int>(blob.size()), blob.data()) ? 0 : -3;
 }
 

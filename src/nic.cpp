@@ -1,16 +1,16 @@
 #include "nic.h"
 
-NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address* addr) : ethernet_engine(ethernet_engine), shm_engine(shm_engine) {
+NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_engine(ethernet_engine), shm_engine(shm_engine), mac(addr) {
     ethernet_engine->bindNIC(this);
     shm_engine->bindNIC(this);
 
-    memcpy(&this->mac, addr, sizeof(Address));
-    printf("..\n");
+
     printf("NIC MAC ON CONSTRUCTOR = %d %d %d %d %d %d\n", this->mac.addr[0], this->mac.addr[1], this->mac.addr[2], this->mac.addr[3], this->mac.addr[4], this->mac.addr[5]);
 }
 
 int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) {
-
+    if(this->shm_engine == nullptr) printf("SHM Engine not found!\n");
+    if(this->ethernet_engine == nullptr) printf("ETHERNET Engine not found!\n");
     /* const bool is_shm = (dst == this->address());
 
     const std::string dst_s  = dst.str();
@@ -31,7 +31,8 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     std::memcpy(f.data, data, size);
 
     bool is_shm = true;
-    return is_shm ? shm_engine->send(f) : ethernet_engine->send(f);
+    printf(is_shm ? "NIC sending through SHM\n" : "NIC sending through ETHERNET\n");
+    return is_shm ? this->shm_engine->send(f) : this->ethernet_engine->send(f);
 }
 
 // called by Engine when a frame is ready

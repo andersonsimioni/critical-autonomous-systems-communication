@@ -18,7 +18,7 @@ class NIC;
 class NIC : public Ethernet, public Observed<NetFrame, NetProtocolType>
 {
 public:
-    NIC(Engine* ethernet_engine, Engine* shm_engine, Address* addr);
+    NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr);
 
     int send(Address dst, Protocol proto, const void* data, unsigned int size);
 
