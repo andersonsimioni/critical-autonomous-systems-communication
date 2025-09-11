@@ -63,7 +63,10 @@ bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame&
 
 // ---------------- Receive hook ----------------
 void EngineShm::on_receive_msg(int msg_len, char* msg) {
-    if (msg_len <= 0 || !msg) return;
+    if (msg_len <= 0 || !msg) {
+        printf("engine SHM on_receive_msg msg_len < 0 or invalid msg!\n");
+        return;
+    }
 
     if (nic) {
         Ethernet::Frame f{};

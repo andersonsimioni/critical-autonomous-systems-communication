@@ -70,8 +70,6 @@ public:
 
     // Send from "from" to "to" (broadcast MAC is allowed)
     int send(const Endpoint& from, const Endpoint& to, const void* payload, unsigned size) {
-        printf("NIC MAC ON PROTOCOL BEFORE = %d %d %d %d %d %d\n", nic->mac.addr[0], nic->mac.addr[1], nic->mac.addr[2], nic->mac.addr[3], nic->mac.addr[4], nic->mac.addr[5]);
-
         if(size > MTU) return -1;
 
         Packet pkt{};
@@ -84,7 +82,6 @@ public:
         uint8_t buffer[sizeof(Header) + MTU];
         std::memcpy(buffer, &pkt, sizeof(Header) + size);
 
-        printf("NIC MAC ON PROTOCOL AFTER = %d %d %d %d %d %d\n", nic->mac.addr[0], nic->mac.addr[1], nic->mac.addr[2], nic->mac.addr[3], nic->mac.addr[4], nic->mac.addr[5]);
         return nic->send(to.mac, etherType_, buffer, static_cast<unsigned>(sizeof(Header) + size));
     }
 

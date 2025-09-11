@@ -42,6 +42,26 @@ public:
 
     virtual ~CarComponent() { stop(); }
 
+    void on_tick_loop()
+    {
+        while (this->wants_tick())
+        {
+            sleep(this->tick_period_ms()/1000);
+            this->on_tick();
+        }
+    }
+
+    static void* receive_msg_thread_rotine(void* args)
+    {
+        //CarComponent* creator = (CarComponent*)args;
+        while (true)
+        {
+            sleep(1);
+            //auto msg = creator->_comm->receive(); //blocking..
+            //creator->on_receive(msg);
+        }
+    }
+
     virtual void initialize_communicator(bool is_master_node, int nodes_count)
     {
         printf("initializing communicator..\n");
@@ -65,24 +85,16 @@ public:
         _ethernet_engine->start();
         if(is_master_node) _shm_engine->start();
 
-        printf("NIC MAC ON INIT COMP = %d %d %d %d %d %d\n", _nic->mac.addr[0], _nic->mac.addr[1], _nic->mac.addr[2], _nic->mac.addr[3], _nic->mac.addr[4], _nic->mac.addr[5]);
-    }
-
-    virtual void default_rotine()
-    {
-        printf("[CAR COMPONENT][%s] running..\n", this->name());
-        while (true)
-        {
-            auto msg = this->_comm->receive();
-            this->_comm->print_rx(msg);
-        }
+        //pthread_create(this->receive_msg_thread, NULL, CarComponent::receive_msg_thread_rotine, (void*)this);
     }
 
     // Parent forks; child runs the worker threads
-    virtual void start(bool is_master_node, int nodes_count) {
-        printf("starting car component base..\n");
+    virtual void initialize(bool is_master_node, int nodes_count) {
+        printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
         initialize_communicator(is_master_node, nodes_count);
-        default_rotine();
+        printf("[CAR COMPONENT][%s] initialized!\n", this->name().c_str());
+        
+        this->on_tick_loop();
     }
 
     // Send SIGTERM and reap the child
@@ -104,9 +116,9 @@ public:
 
 protected:
     // App-specific hooks
-    virtual void on_receive(const typename CommunicatorT::Rx& rx) = 0;
-    virtual bool wants_tick() const { return false; }
-    virtual unsigned tick_period_ms() const { return 1000; }
+    virtual void on_receive(const typename CommunicatorT::Rx& rx) { printf("message arrived\n"); }
+    virtual bool wants_tick() { return true; }
+    virtual unsigned tick_period_ms() { return 1000; }
     virtual void on_tick() {}
 
     static std::string to_string(const std::vector<uint8_t>& v){
@@ -115,6 +127,8 @@ protected:
 
 public:
 //protected:
+    pthread_t* receive_msg_thread;
+
     Ethernet::Address _my_mac;
     EngineShm* _shm_engine;
     EngineEthernet* _ethernet_engine;

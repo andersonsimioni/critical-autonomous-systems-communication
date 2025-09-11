@@ -16,36 +16,20 @@ public:
 
     }
 
-    virtual void default_rotine() override
+    virtual void initialize(bool is_master_node, int nodes_count) override
     {
-        printf("All done, car ready!\n");
-        while (true)
-        {
-            sleep(1);
-            printf("NIC MAC ON GATEWAY = %d %d %d %d %d %d\n", this->_comm->_protocol->nic->mac.addr[0], this->_comm->_protocol->nic->mac.addr[1], this->_comm->_protocol->nic->mac.addr[2], this->_comm->_protocol->nic->mac.addr[3], this->_comm->_protocol->nic->mac.addr[4], this->_comm->_protocol->nic->mac.addr[5]);
-            this->_comm->send(this->_local, "ping");
-        }
-    }
-
-    virtual void start(bool is_master_node, int nodes_count) override
-    {
-        printf("gateway starting..\n");
+        printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
         this->initialize_communicator(is_master_node, nodes_count);
-        sync_vms();
+        this->sync_vms();
+        printf("[CAR COMPONENT][%s] initialized!\n", this->name().c_str());
     }
 
 protected:
-    bool wants_tick() const override { return true; }
-    unsigned tick_period_ms() const override { return 2000; } // every 2s
+    bool wants_tick() override { return true; }
+    unsigned tick_period_ms() override { return 1000; }
 
     void on_tick() override {
-        
-    }
-
-    void on_receive(const Rx& rx) override {
-        // Example: accept commands addressed to this port (from gateway or others)
-        auto s = Base::to_string(rx.payload);
-        std::cout<<"Gateway Received data: "<<s<<"\n";
+        this->_comm->send(this->_local, "ping");
     }
 
 private:
