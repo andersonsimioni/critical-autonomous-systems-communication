@@ -47,6 +47,25 @@ public:
 
         Frame() : proto(0), size(0) {}
     };
+
+    //  Função para imprimir um frame completo
+    static void print_frame(const Frame& f) {
+        printf("===== FRAME =====\n");
+        printf("SRC: %s\n", f.src.str().c_str());
+        printf("DST: %s\n", f.dst.str().c_str());
+        printf("PROTO: 0x%04X\n", static_cast<unsigned>(f.proto));
+        printf("SIZE: %u bytes\n", f.size);
+
+        printf("PAYLOAD (texto): ");
+        for (unsigned i = 0; i < f.size; i++) {
+            char c = static_cast<char>(f.data[i]);
+            if (std::isprint(static_cast<unsigned char>(c)))
+                putchar(c);
+            else
+                putchar('.');
+        }
+        printf("\n=================\n");
+    }
 };
 
 #endif // ETHERNET_H

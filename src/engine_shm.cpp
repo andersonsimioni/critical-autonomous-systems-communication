@@ -16,11 +16,13 @@ int EngineShm::start() {
 
 int EngineShm::send(const Ethernet::Frame& frame) {
     printf("serializing SHM Ethernet Frame..\n");
+    Ethernet::print_frame(frame);
     auto blob = serialize_frame(frame);
     if (blob.empty()) { printf("SHM Ethernet Frame EMPTY!\n"); return -1; }
     if (blob.size() > PAYLOAD) { printf("SHM Ethernet Frame REACHED PAYLOAD LIMIT!\n"); return -2; }
 
     printf("sending SHM Ethernet Frame..\n");
+    printf("packet: %s\n", blob);
     return ShmNode::send_msg(static_cast<int>(blob.size()), blob.data()) ? 0 : -3;
 }
 
@@ -47,19 +49,56 @@ std::vector<char> EngineShm::serialize_frame(const Ethernet::Frame& f) {
 }
 
 bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame& out) {
-    if (!data || len < sizeof(out.dst)+sizeof(out.src)+sizeof(out.proto)+sizeof(out.size)) return false;
+    if (!data) {
+        printf("[deserialize_frame] ERROR: data pointer is NULL!\n");
+        return false;
+    }
+
+    size_t header_size = sizeof(out.dst) + sizeof(out.src) +
+                         sizeof(out.proto) + sizeof(out.size);
+
+    if (len < header_size) {
+        printf("[deserialize_frame] ERROR: len=%zu too small, expected >= %zu\n", len, header_size);
+        return false;
+    }
+
     const char* ptr = data;
-    std::memcpy(&out.dst, ptr, sizeof(out.dst)); ptr += sizeof(out.dst);
-    std::memcpy(&out.src, ptr, sizeof(out.src)); ptr += sizeof(out.src);
-    std::memcpy(&out.proto, ptr, sizeof(out.proto)); ptr += sizeof(out.proto);
-    std::memcpy(&out.size, ptr, sizeof(out.size)); ptr += sizeof(out.size);
-    if (out.size > Ethernet::Frame::MAX_DATA) return false;
-    if (sizeof(out.dst)+sizeof(out.src)+sizeof(out.proto)+sizeof(out.size)+out.size != len) return false;
-    if (out.size) {
+
+    std::memcpy(&out.dst, ptr, sizeof(out.dst)); 
+    ptr += sizeof(out.dst);
+
+    std::memcpy(&out.src, ptr, sizeof(out.src)); 
+    ptr += sizeof(out.src);
+
+    std::memcpy(&out.proto, ptr, sizeof(out.proto)); 
+    ptr += sizeof(out.proto);
+
+    std::memcpy(&out.size, ptr, sizeof(out.size)); 
+    ptr += sizeof(out.size);
+
+    if (out.size > Ethernet::Frame::MAX_DATA) {
+        printf("[deserialize_frame] ERROR: payload size %u exceeds MAX_DATA=%u\n", 
+               out.size, Ethernet::Frame::MAX_DATA);
+        return false;
+    }
+
+    if (header_size + out.size != len) {
+        printf("[deserialize_frame] ERROR: mismatch (header=%zu + payload=%u = %zu) != len=%zu\n",
+               header_size, out.size, header_size + out.size, len);
+        return false;
+    }
+
+    if (out.size > 0) {
         std::memcpy(out.data, ptr, out.size);
     }
+
+    // Log final resumido
+    printf("[deserialize_frame] OK: len=%zu, payload=%u bytes, proto=0x%04X\n", 
+           len, out.size, static_cast<unsigned>(out.proto));
+
     return true;
 }
+
 
 // ---------------- Receive hook ----------------
 void EngineShm::on_receive_msg(int msg_len, char* msg) {
@@ -68,7 +107,13 @@ void EngineShm::on_receive_msg(int msg_len, char* msg) {
         return;
     }
 
-    if (this->nic) {
+    if(!this->nic)
+    {
+        printf("SHM Engine without NIC BIND\n");
+        return;
+    }
+    else
+    {
         Ethernet::Frame f{};
         if (deserialize_frame(msg, static_cast<size_t>(msg_len), f)) {
             static_cast<NIC*>(this->nic)->on_frame(f);
@@ -81,5 +126,6 @@ void EngineShm::on_receive_msg(int msg_len, char* msg) {
         return;
     }
 
-    std::fprintf(stderr, "[EngineShm] RX %d bytes (sem NIC/handler)\n", msg_len);
+    std::fprintf(stderr, "[EngineShm] RX %d bytes wrong format!\n", msg_len);
+    printf("Dropped packet: %s\n", msg);
 }

@@ -115,7 +115,7 @@ bool ShmNode::initialize_node()
     return true;
 }
 
-bool ShmNode::send_msg(int msg_len, char* msg)
+bool ShmNode::send_msg(int msg_len, const char* msg)
 {
     printf("sending message: %s\n", msg);
     printf("locking bus..\n");

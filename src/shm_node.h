@@ -59,7 +59,7 @@ public:
     /// @brief Could block the execution if other node is using bus
     /// @param msg Message you want to send
     /// @return Operation result
-    bool send_msg(int msg_len, char* msg);
+    bool send_msg(int msg_len, const char* msg);
 
     bool initialize_node();
 

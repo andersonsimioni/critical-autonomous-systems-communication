@@ -99,6 +99,7 @@ public:
     // Convenience send helpers
     int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
     int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
+    
     int send_local(const void* p, size_t n)    { return _comm->send(_local, p, n); }
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
 

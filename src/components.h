@@ -26,7 +26,7 @@ protected:
         char msg[64];
         std::snprintf(msg, sizeof(msg), "time=%llu rpm=%u torque=%u", get_microseconds_now(), _rpm, 250u);
         Base::send_broadcast(msg, std::strlen(msg)); */
-        Base::send_local("Hello");
+        //Base::send_local("Hello");
     }
 
     void on_receive(const Rx& rx) override {
