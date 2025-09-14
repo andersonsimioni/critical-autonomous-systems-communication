@@ -17,7 +17,7 @@ MCAST_PORT="1234"
 NUM_VMS=3
 
 
-Finds available terminal
+# Finds available terminal
 if command -v xterm &>/dev/null; then
     TERM_CMD="xterm -hold -e"
 elif command -v konsole &>/dev/null; then
