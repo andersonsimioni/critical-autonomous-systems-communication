@@ -1,4 +1,5 @@
 #include "shm_node.h"
+#include "ethernet.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -13,10 +14,33 @@
 #include <semaphore.h>
 #include <unistd.h>
 #include <time.h>
+#include <cstdint>
 #include <pthread.h>
 #include "string.h"
 #include <string>
 #include <iostream>
+
+void print_ethernet_from_buffer(const void* buf, size_t len) {
+    if (len < 14) {
+        printf("[Ethernet] Message too short: %zu bytes\n", len);
+        return;
+    }
+
+    Ethernet::Frame f;
+
+    // Copy MAC addresses
+    std::memcpy(f.dst.addr.data(), buf, 6);
+    std::memcpy(f.src.addr.data(), (const uint8_t*)buf + 6, 6);
+
+    // Protocol in little-endian
+    f.proto = ((uint8_t*)buf)[13] << 8 | ((uint8_t*)buf)[12];
+
+    // Payload
+    f.size = len - 14 > Ethernet::Frame::MAX_DATA ? Ethernet::Frame::MAX_DATA : len - 14;
+    std::memcpy(f.data, (const uint8_t*)buf + 14, f.size);
+
+    Ethernet::print_frame(f);
+}
 
 void* ShmNode::initialize_shared_memory_region()
 {
@@ -80,7 +104,7 @@ void* receive_msg_rotine(void* args)
     {
         //sleep(1);continue;
 
-        printf("waiting messages..\n"); 
+        printf("waiting for messages..\n"); 
         pthread_mutex_lock(&s->new_msg_cond_mtx);
         while(!s->msg_available) pthread_cond_wait(&s->new_msg_cond, &s->new_msg_cond_mtx);
         pthread_mutex_unlock(&s->new_msg_cond_mtx);
@@ -90,7 +114,15 @@ void* receive_msg_rotine(void* args)
         printf("[%d] [%d] new message arrived!\n", s->parent_pid, node->pid);
         char* msg = (char*)malloc(s->msg_len);
         memcpy(msg, s->bus, s->msg_len);
-        
+
+        printf("Hex message is: ");
+        for (size_t i = 0; i < s->msg_len; i++)
+            printf("%02x ", ((unsigned char*)s->bus)[i]);
+        printf("\n");
+
+        printf("Interpreted payload:\n");
+        print_ethernet_from_buffer(s->bus, s->msg_len);
+
         pthread_barrier_wait(&s->all_read_done_barrier);
 
         node->on_receive_msg(s->msg_len, msg);
@@ -134,7 +166,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     pthread_cond_broadcast(&this->shared_data_ptr->new_msg_cond);
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
 
-    printf("waiting all read done barrier..\n");
+    printf("waiting for all read done barrier..\n");
     pthread_barrier_wait(&this->shared_data_ptr->all_read_done_barrier);
     printf("all nodes read the message\n");
 

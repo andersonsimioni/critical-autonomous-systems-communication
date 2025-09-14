@@ -354,6 +354,8 @@ x86/
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/
+!busybox/bin/
+!busybox/bin/*
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
