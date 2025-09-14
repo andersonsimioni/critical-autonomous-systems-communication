@@ -46,7 +46,7 @@ public:
     void Log(const char* msg)
     {
         if (!this->log) return;
-        printf(msg);
+        printf("%s", msg);
     }
 
     ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log);
