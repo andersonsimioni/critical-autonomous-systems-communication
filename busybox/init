@@ -1,36 +1,13 @@
 #!/bin/sh
-# init mínimo para debug
-
-echo "[init] Subiu o script init!"
-
-# Monta os sistemas de arquivos básicos
-mount -t proc none /proc
+mkdir /sys /proc
 mount -t sysfs none /sys
 mount -t devtmpfs none /dev
-
-# Mostra o que tem disponível
-echo "[init] Conteúdo de /:"
-ls -l /
-
-echo "[init] Conteúdo de /bin:"
-ls -l /bin
-
-# Abre um shell interativo do busybox
-exec /bin/sh
-
-
-
-
-#!/bin/sh
-#mkdir /sys /proc
-#mount -t sysfs none /sys
-#mount -t devtmpfs none /dev
-#mount -t proc proc /proc
+mount -t proc proc /proc
 
 #setting shared memory region config
-#mkdir -p /dev/shm
-#mount -t tmpfs -o mode=1777,size=1G tmpfs /dev/shm
+mkdir -p /dev/shm
+mount -t tmpfs -o mode=1777,size=1G tmpfs /dev/shm
 
-#ip link set dev eth0 up 
+ip link set dev eth0 up 
 #exec /bin/sh
-#exec /main eth0 ping
+exec /main eth0 ping
