@@ -10,6 +10,7 @@
 
 #include "ethernet.h"
 #include "protocol.h"
+#include "utils.h"
 
 // packet origin
 enum class ChannelOrigin : unsigned char { Ethernet = 0, SharedMemory = 1 };
@@ -86,6 +87,20 @@ private:
         uint16_t port() const override { return _port; }
 
         void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len) override {
+
+            // Convert payload to string for printing
+            std::string msg(reinterpret_cast<const char*>(data), len);
+            
+            // Print sender info and message
+            printf("Received from %s:%u -> %s:%u: %s\n",
+                from.mac.str().c_str(), from.port,
+                to.mac.str().c_str(), to.port,
+                msg.c_str());
+
+            // Print receive timestamp
+            uint64_t recv_time = get_microseconds_now();
+            printf("Time received: %lu us\n", recv_time);
+
             Communicator::Rx rx;
             rx.from = from;
             rx.to = to;

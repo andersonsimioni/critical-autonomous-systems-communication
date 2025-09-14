@@ -14,22 +14,22 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=2
+NUM_VMS=1
 
 
-# Finds available terminal
-if command -v xterm &>/dev/null; then
-    TERM_CMD="xterm -hold -e"
-elif command -v konsole &>/dev/null; then
-    TERM_CMD="konsole -e"
-elif command -v xfce4-terminal &>/dev/null; then
-    TERM_CMD="xfce4-terminal -e"
-elif command -v mate-terminal &>/dev/null; then
-    TERM_CMD="mate-terminal -e"
-else
-    echo "[INFO] Nenhum emulador gráfico encontrado. Rodando todas as VMs no mesmo terminal..."
-    TERM_CMD=""  
-fi
+# # Finds available terminal
+# if command -v xterm &>/dev/null; then
+#     TERM_CMD="xterm -sl 10000 -hold -e"
+# elif command -v konsole &>/dev/null; then
+#     TERM_CMD="konsole --noclose -e"
+# elif command -v xfce4-terminal &>/dev/null; then
+#     TERM_CMD="xfce4-terminal -- bash -c"
+# elif command -v mate-terminal &>/dev/null; then
+#     TERM_CMD="mate-terminal -- bash -c"
+# else
+#     echo "[INFO] Nenhum emulador gráfico encontrado. Rodando todas as VMs no mesmo terminal..."
+#     TERM_CMD=""  
+# fi
 
 
 # Loop for VMs

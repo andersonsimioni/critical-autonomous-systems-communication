@@ -1,5 +1,6 @@
 #include "shm_node.h"
 #include "ethernet.h"
+#include "utils.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -19,28 +20,6 @@
 #include "string.h"
 #include <string>
 #include <iostream>
-
-void print_ethernet_from_buffer(const void* buf, size_t len) {
-    if (len < 14) {
-        printf("[Ethernet] Message too short: %zu bytes\n", len);
-        return;
-    }
-
-    Ethernet::Frame f;
-
-    // Copy MAC addresses
-    std::memcpy(f.dst.addr.data(), buf, 6);
-    std::memcpy(f.src.addr.data(), (const uint8_t*)buf + 6, 6);
-
-    // Protocol in little-endian
-    f.proto = ((uint8_t*)buf)[13] << 8 | ((uint8_t*)buf)[12];
-
-    // Payload
-    f.size = len - 14 > Ethernet::Frame::MAX_DATA ? Ethernet::Frame::MAX_DATA : len - 14;
-    std::memcpy(f.data, (const uint8_t*)buf + 14, f.size);
-
-    Ethernet::print_frame(f);
-}
 
 void* ShmNode::initialize_shared_memory_region()
 {
@@ -95,7 +74,7 @@ bool ShmNode::initialize_sync_controls()
     return true;
 }
 
-void* receive_msg_rotine(void* args)
+void* receive_msg_routine(void* args)
 {
     ShmNode* node = (ShmNode*)args;
     SharedData* s = node->shared_data_ptr;
@@ -120,9 +99,6 @@ void* receive_msg_rotine(void* args)
             printf("%02x ", ((unsigned char*)s->bus)[i]);
         printf("\n");
 
-        printf("Interpreted payload:\n");
-        print_ethernet_from_buffer(s->bus, s->msg_len);
-
         pthread_barrier_wait(&s->all_read_done_barrier);
 
         node->on_receive_msg(s->msg_len, msg);
@@ -133,7 +109,7 @@ bool ShmNode::initialize_receive_msg_thread()
 {
     printf("creating reader thread..\n");
     pthread_t reader_thread;
-    pthread_create(&reader_thread, NULL, receive_msg_rotine, (void*)this);
+    pthread_create(&reader_thread, NULL, receive_msg_routine, (void*)this);
 
     return true;
 }
