@@ -4,6 +4,7 @@
 #include "utils.h"
 #include <cstdio>
 #include <set>
+#include <string>
 
 template <typename TNIC>
 class Gateway : public CarComponent<TNIC> {
@@ -12,20 +13,20 @@ class Gateway : public CarComponent<TNIC> {
 public:
     Gateway(uint16_t port) : Base(port, "Gateway") {}
 
-    void sync_vms(int total_vms = 5)
+    void sync_vms(int total_vms = 2)
     {
         std::set<std::string> ready_nodes;
-        ready_nodes.insert(this->_my_mac); 
+        ready_nodes.insert(this->_my_mac.str()); 
         bool started = false;
 
         // Send READY via broadcast
-        this->_comm.send(this->_to_bcast, "READY");
+        this->_comm->send(this->_to_bcast, "READY");
         std::cout << "[*] Gateway enviou READY\n";
         
         // Wait others to send READY
         while (!started) {
             std::cout << "[*] VM AGUARDA OUTRAS VMS \n";
-            auto rx = this->_comm.receive(); //bloqueante
+            auto rx = this->_comm->receive(); //bloqueante
             std::string payload(rx.payload.begin(), rx.payload.end());
 
             std::cout <<"[" << (rx.origin == ChannelOrigin::Ethernet ? "ETHERNET" : "SHM") << "] "
@@ -44,7 +45,7 @@ public:
                     // If this is the fist to see all READY, send "GO"
                 if ((int)ready_nodes.size() == total_vms) {
                     std::cout << "[SYNC] Todos prontos. Enviando GO...\n";
-                    this->_comm.send(this->_to_bcast, "GO");
+                    this->_comm->send(this->_to_bcast, "GO");
                 }
             } 
             // If message is GO, all VMS are ready to start
@@ -59,7 +60,7 @@ public:
     {
         printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
         this->initialize_communicator(is_master_node, nodes_count);
-        //this->sync_vms();
+        this->sync_vms();
         printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
     }
 
