@@ -150,7 +150,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     return true;
 }
 
-ShmNode::ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log) {
+ShmNode::ShmNode(const char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log) {
     this->shared_memory_region_name = _shared_memory_region_name;
     this->is_master_node = _is_master_node;
     this->nodes_count = _nodes_count;

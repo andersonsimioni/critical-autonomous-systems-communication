@@ -1,7 +1,7 @@
 #include "engine_shm.h"
 #include <cstdio>
 
-EngineShm::EngineShm(char* shm_region_name, bool is_master, int nodes)
+EngineShm::EngineShm(const char* shm_region_name, bool is_master, int nodes)
 : ShmNode(shm_region_name, is_master, nodes, false), _shm_name(shm_region_name), _is_master(is_master), _nodes(nodes)
 {
     // do not initialize here, initialize on start() after create all nodes..
@@ -22,7 +22,7 @@ int EngineShm::send(const Ethernet::Frame& frame) {
     if (blob.size() > PAYLOAD) { printf("SHM Ethernet Frame REACHED PAYLOAD LIMIT!\n"); return -2; }
 
     printf("sending SHM Ethernet Frame..\n");
-    printf("packet: %s\n", blob);
+    printf("packet: %.*s\n", (int)blob.size(), blob.data());
     return ShmNode::send_msg(static_cast<int>(blob.size()), blob.data()) ? 0 : -3;
 }
 

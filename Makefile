@@ -33,8 +33,13 @@ clean_build:
 
 cpio:
 	@echo generating cpio...
-	@cp bin/main-riscv busybox/main
-	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
+	@mkdir -p rootfs/proc rootfs/sys rootfs/dev rootfs/bin rootfs/sbin
+	@cp bin/main-riscv rootfs/main
+	@cp busybox/init rootfs/init
+	@cp busybox/bin/* rootfs/bin/
+	@cp busybox/sbin/ip rootfs/sbin/
+	@chmod +x rootfs/init rootfs/main rootfs/sbin/ip
+	@(cd rootfs && find . | cpio -o -H newc) > initramfs.cpio
 
 run_vms:
 	@echo running vms...

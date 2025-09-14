@@ -18,7 +18,7 @@ class NIC; // forward
 
 class EngineShm : public Engine, public ShmNode {
 public:
-    EngineShm(char* shm_region_name, bool is_master, int nodes);
+    EngineShm(const char* shm_region_name, bool is_master, int nodes);
 
     ~EngineShm() override {
         _running.store(false);
@@ -48,7 +48,7 @@ private:
     std::atomic<bool> _running{false};
     RawRxHandler _raw_rx;
 
-    char* _shm_name;
+    const char* _shm_name;
     bool  _is_master;
     int   _nodes;
 };
