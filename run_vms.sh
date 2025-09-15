@@ -14,7 +14,7 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=3
+NUM_VMS=5
 
 
 # Finds available terminal
@@ -30,7 +30,6 @@ else
     echo "[INFO] Nenhum emulador gráfico encontrado. Rodando todas as VMs no mesmo terminal..."
     TERM_CMD=""  
 fi
-
 
 # Loop for VMs
 for i in $(seq 0 $((NUM_VMS-1))); do
@@ -63,6 +62,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
             exec bash
         " &
     fi
+        sleep 3
 done
 
 # Wait until every VM has started

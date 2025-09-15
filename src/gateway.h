@@ -13,7 +13,7 @@ class Gateway : public CarComponent<TNIC> {
 public:
     Gateway(uint16_t port) : Base(port, "Gateway") {}
 
-    void sync_vms(int total_vms = 2)
+    void sync_vms(int total_vms = 5)
     {
         std::set<std::string> ready_nodes;
         ready_nodes.insert(this->_my_mac.str()); 
