@@ -1,23 +1,6 @@
-#ifndef GATEWAY_H
-#define GATEWAY_H
 #pragma once
 
-#include <csignal>
-#include <cstring>
-#include <iostream>
-#include <string>
-#include <thread>
-#include <chrono>
-
-#include "ethernet.h"
-#include "frame.h"
-#include "engine.h"
-#include "engine_ethernet.h"
-#include "engine_shm.h"
-#include "nic.h"
-#include "protocol.h"
-#include "communicator.h"
-#include "components.h"
+#include "car_component.h"
 #include "utils.h"
 #include <cstdio>
 #include <set>
