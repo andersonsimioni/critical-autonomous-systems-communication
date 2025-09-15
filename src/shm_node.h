@@ -29,27 +29,19 @@ typedef struct {
 class ShmNode
 {
 public:
-    pid_t pid;   
-
     int nodes_count;
     bool is_master_node;
     char* shared_memory_region_name;    
     bool using_bus;    
-    bool log;
-    
     SharedData* shared_data_ptr;
 
     void* initialize_shared_memory_region();
     bool initialize_sync_controls();
     bool initialize_receive_msg_thread();
 
-    void Log(const char* msg)
-    {
-        if (!this->log) return;
-        printf("%s", msg);
-    }
+    
 
-    ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log);
+    ShmNode(char* _shared_memory_region_name, bool _is_master_node, int _nodes_count);
     
     virtual void on_receive_msg(int msg_len, char* msg)
     {
@@ -59,7 +51,7 @@ public:
     /// @brief Could block the execution if other node is using bus
     /// @param msg Message you want to send
     /// @return Operation result
-    bool send_msg(int msg_len, const char* msg);
+    bool send_msg(int msg_len, char* msg);
 
     bool initialize_node();
 
