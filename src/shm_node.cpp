@@ -23,19 +23,24 @@
 
 void* ShmNode::initialize_shared_memory_region()
 {
-    int shm_key = 56468;
-    std::string region_name = this->shared_memory_region_name + std::to_string(shm_key);
-
     printf("creating/opening shared memory region..\n");
-    int shm_id = shm_open(region_name.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    int shm_id = shm_open(this->shared_memory_region_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     
-    if(ftruncate(shm_id, sizeof(SharedData)) == -1) exit(-1);
+    if(ftruncate(shm_id, sizeof(SharedData)) == -1)
+    {
+        printf("error on create/open shared memory region!\n");
+        exit(-1);
+    }
 
     printf("mapping shared memory region..\n");
     this->shared_data_ptr = (SharedData*)mmap(NULL, sizeof(SharedData), PROT_READ | PROT_WRITE, MAP_SHARED, shm_id, 0);
     if (this->shared_data_ptr == MAP_FAILED) exit(-1);
 
-    if(this->is_master_node) memset(this->shared_data_ptr, 0, sizeof(SharedData));
+    if(this->is_master_node)
+    {
+        memset(this->shared_data_ptr, 0, sizeof(SharedData));
+        this->shared_data_ptr->parent_pid = getpid();
+    }
 
     return this->shared_data_ptr;
 }
@@ -82,9 +87,10 @@ void* receive_msg_routine(void* args)
         pthread_mutex_lock(&s->new_msg_cond_mtx);
         while(!s->msg_available) pthread_cond_wait(&s->new_msg_cond, &s->new_msg_cond_mtx);
         pthread_mutex_unlock(&s->new_msg_cond_mtx);
+
         if(node->using_bus) continue;
         
-        printf("new message arrived!\n");
+        printf("[%d] [%d] new message arrived!\n", s->parent_pid, node->pid);
         char* msg = (char*)malloc(s->msg_len);
         memcpy(msg, s->bus, s->msg_len);
 
@@ -117,12 +123,12 @@ bool ShmNode::initialize_node()
     return true;
 }
 
-bool ShmNode::send_msg(int msg_len, char* msg)
+bool ShmNode::send_msg(int msg_len, const char* msg)
 {
     printf("sending message: %s\n", msg);
     printf("locking bus..\n");
     pthread_mutex_lock(&this->shared_data_ptr->bus_mtx);
-    using_bus = true;
+    this->using_bus = true;
 
     printf("writing message..\n");
     memset(this->shared_data_ptr->bus, 0, PAYLOAD);
@@ -145,7 +151,7 @@ bool ShmNode::send_msg(int msg_len, char* msg)
     this->shared_data_ptr->msg_available = false;
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
 
-    using_bus = false;
+    this->using_bus = false;
     printf("unlocking bus..\n");
     pthread_mutex_unlock(&this->shared_data_ptr->bus_mtx);
 
@@ -158,6 +164,8 @@ ShmNode::ShmNode(const char* _shared_memory_region_name, bool _is_master_node, i
     this->nodes_count = _nodes_count;
     this->using_bus = false;
     this->shared_data_ptr = nullptr;
+    this->log = log;
+    this->pid = getpid();
 }
 
 ShmNode::~ShmNode() {}

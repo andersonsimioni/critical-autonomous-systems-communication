@@ -6,6 +6,7 @@
 #include "ethernet.h"
 #include "frame.h"
 #include "engine.h"
+#include "engine_ethernet.h"
 #include "observer.h"
 
 // Forward declaration to avoid circular dependencies
@@ -14,11 +15,10 @@ class NIC;
 // -----------------------------------------------------
 // NIC as an Observed subject of frames
 // -----------------------------------------------------
-class NIC : public Ethernet,
-            public Observed<NetFrame, NetProtocolType>
+class NIC : public Ethernet, public Observed<NetFrame, NetProtocolType>
 {
 public:
-    NIC(Engine* e, Address addr);
+    NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr);
 
     int send(Address dst, Protocol proto, const void* data, unsigned int size);
 
@@ -26,8 +26,9 @@ public:
 
     const Address& address() const;
 
-private:
-    Engine* engine;
+//private:
+    Engine* ethernet_engine;
+    Engine* shm_engine;
     Address mac;
 };
 

@@ -137,7 +137,7 @@ public:
     void attach(PortObserver* po) { portObservers_.push_back(po); }
     void detach(PortObserver* po) { portObservers_.remove(po);   }
 
-private:
+//private:
     struct AsyncCapsule {
         Endpoint        from;
         Endpoint        to;
@@ -148,13 +148,13 @@ private:
 
     void notify_by_port(const AsyncCapsule& c) {
         for(auto* po : portObservers_) {
-            if(po && po->port() == c.to.port) {
+            if(po && (po->port() == c.to.port || po->port() <= -1)) {
                 po->on_packet(c.from, c.to, c.payload.data(), c.length);
             }
         }
     }
 
-private:
+//private:
     NIC* nic;
     ProtocolNumber etherType_;
     std::list<PortObserver*> portObservers_;

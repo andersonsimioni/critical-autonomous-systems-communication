@@ -23,50 +23,39 @@ public:
     using Address = Ethernet::Address;
 
     struct Rx {
-        Endpoint      from;
-        Endpoint      to;
+        typename Protocol<TNIC>::Endpoint      from;
+        typename Protocol<TNIC>::Endpoint      to;
         std::vector<uint8_t> payload;
         ChannelOrigin origin;
     };
 
-    Communicator(ProtocolT* protoEth, ProtocolT* protoShm, const Endpoint& local)
-        : _eth(protoEth), _shm(protoShm), _local(local)
+    /// @brief Use -1 for observe all ports
+    /// @param port 
+    void set_up_port_observer(uint16_t port)
     {
-        if(!_eth || !_shm) throw std::runtime_error("Communicator: null protocol");
+        _obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
+        _protocol->attach(_obs);
+    }
 
-        _ethObs = new PortObserverImpl(this, ChannelOrigin::Ethernet, local.port);
-        _shmObs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, local.port);
-
-        _eth->attach(_ethObs);
-        _shm->attach(_shmObs);
+    Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
+    {
+        set_up_port_observer(local.port);
     }
 
     ~Communicator() {
-        if(_eth && _ethObs) _eth->detach(_ethObs);
-        if(_shm && _shmObs) _shm->detach(_shmObs);
-        delete _ethObs; delete _shmObs;
+        if(_protocol && _obs) _protocol->detach(_obs);
+        delete _obs;
+    }
+
+    void print_rx(const Rx& rx) {
+        std::string s(rx.payload.begin(), rx.payload.end());
+        std::cout << s << std::endl;
     }
 
     // route the send
     // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
-        if (to.mac == Address::BROADCAST()) {
-            //std::cout<<"Sending broadcast msg: "<<data<<"\n";
-            Endpoint bto = to;
-            bto.mac = Address::BROADCAST();
-            return _eth->send(_local, bto, data, (unsigned)len);
-        }
-
-        if (to.mac == _local.mac) 
-        {
-            return _shm->send(_local, to, data, (unsigned)len);
-        }
-
-        // fallback send broadcast ethernet
-        Endpoint bto = to;
-        bto.mac = Address::BROADCAST();
-        //std::cout<<"Sending broadcast msg: "<<data<<"\n";
-        return _eth->send(_local, bto, data, (unsigned)len);
+        return _protocol->send(_local, to, data, (unsigned)len);
     }
 
     int send(const Endpoint& to, const std::string& s) {
@@ -94,8 +83,7 @@ public:
 private:
     class PortObserverImpl : public ProtocolT::PortObserver {
     public:
-        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port)
-            : _owner(owner), _origin(origin), _port(port) {}
+        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port) : _owner(owner), _origin(origin), _port(port) {}
         uint16_t port() const override { return _port; }
 
         void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len) override {
@@ -118,6 +106,8 @@ private:
             rx.to = to;
             rx.payload.assign(data, data+len);
             rx.origin = _origin;
+            
+            _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
         }
     private:
@@ -132,15 +122,27 @@ private:
         _cv.notify_one();
     }
 
-private:
-    ProtocolT* _eth{nullptr};
-    ProtocolT* _shm{nullptr};
+//private:
+public:
+    ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
 
-    PortObserverImpl* _ethObs{nullptr};
-    PortObserverImpl* _shmObs{nullptr};
+    PortObserverImpl* _obs{nullptr};
 
     std::mutex              _mtx;
     std::condition_variable _cv;
     std::queue<Rx>          _queue;
+
+private:
+    Observed<Rx, uint16_t> observed_;
+    Rx scratch_;
+
+public:
+
+    void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
+    void detach(Observer<Rx, uint16_t>* o)  { observed_.detach(o);  }
+    void notify(const Rx& rx, uint16_t port = 0) {
+        scratch_ = rx;
+        observed_.notify(port, &scratch_);
+    }
 };

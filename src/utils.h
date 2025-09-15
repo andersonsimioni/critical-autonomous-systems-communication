@@ -1,14 +1,9 @@
+#pragma once
+
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <csignal>
-#include <cstring>
-#include <iostream>
-#include <string>
 #include <sys/time.h>
-#include <vector>
-#include <chrono>
-#include <iomanip>
 #include <ctime>
 #include <algorithm>
 #include <numeric>
