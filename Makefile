@@ -33,17 +33,13 @@ clean_build:
 
 cpio:
 	@echo generating cpio...
-	@cp bin/main-riscv busybox/main
-	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
+	@bash ./initramfs_maker.sh
+	#@cp bin/main-riscv busybox/main
+	#@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
 run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
-
-build/x86/%.o: src/%.cpp
-	@mkdir -p $(dir $@)
-	@echo cc $<
-	$(CXX_X86) $(CXXFLAGS) -c $< -o $@
 
 build/riscv/%.o: src/%.cpp
 	@mkdir -p $(dir $@)

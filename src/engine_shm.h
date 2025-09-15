@@ -51,89 +51,24 @@ struct ShmBus {
 
 class EngineShm : public Engine {
 public:
-    using Address = Ethernet::Address;
-    using Protocol_Number = Ethernet::Protocol;
+    EngineShm(const char* shm_region_name, bool is_master, int nodes);
 
-    EngineShm() = default;
-    ~EngineShm() override { unregister_me(); detach(); }
-
-    // Create or join the SHM bus
-    bool open(const char* path, int proj_id) {
-        key_t k = ftok(path, proj_id);
-        if (k == (key_t)-1) return false;
-
-        // SHM segment
-        int created = 0;
-        _shm = shmget(k, sizeof(ShmBus), IPC_CREAT | IPC_EXCL | 0600);
-        if (_shm == -1) {
-            if (errno != EEXIST) return false;
-            _shm = shmget(k, sizeof(ShmBus), 0600);
-            if (_shm == -1) return false;
-        } else created = 1;
-
-        _bus = (ShmBus*)shmat(_shm, nullptr, 0);
-        if (_bus == (void*)-1) { _bus = nullptr; return false; }
-        if (created) { *_bus = ShmBus{}; }
-        if (_bus->magic != 0x5353484D) return false;
-
-        // Semaphores: [0] = bus mutex, [1..N] = per-queue item counters
-        _sem = semget(k, 1 + SHM_MAX_CONSUMERS, IPC_CREAT | IPC_EXCL | 0600);
-        if (_sem == -1) {
-            if (errno != EEXIST) return false;
-            _sem = semget(k, 1 + SHM_MAX_CONSUMERS, 0600);
-            if (_sem == -1) return false;
-        } else {
-            union semun u{};
-            for (unsigned i = 0; i < 1 + SHM_MAX_CONSUMERS; ++i) { u.val = 0; semctl(_sem, i, SETVAL, u); }
-            u.val = 1; semctl(_sem, 0, SETVAL, u); // bus mutex unlocked
-        }
-
-        return register_me();
+    ~EngineShm() override {
+        _running.store(false);
     }
 
-    void bindNIC(NIC* nic_ptr) { _nic = nic_ptr; }
-    const Address& address() const { return _addr; }
-    void address(const Address& a) { _addr = a; }
+    // -------- Engine interface ----------
+    int send(const Ethernet::Frame& frame) override;
+    int start() override;
 
-    void setNotifySignal(int signo) { _sig = signo; }
+    // -------- Raw Fallback ---------------
+    using RawRxHandler = std::function<void(const char* data, size_t len)>;
+    void set_raw_rx_handler(RawRxHandler h) { _raw_rx = std::move(h); }
 
-    //send ethernet frame through shm
-    int send(const Ethernet::Frame& frame) override {
-        if (!_bus || _me < 0) return -1;
+    int send_bytes(const void* data, size_t len);
 
-        bus_lock();
-        int fanout = 0;
-        for (unsigned i = 0; i < SHM_MAX_CONSUMERS; ++i) {
-            if ((int)i == _me) continue;  // no loopback
-            auto& q = _bus->q[i];
-            if (q.pid == 0) continue;
-            if (enqueue(q, frame)) {
-                sem_add(sem_q(i), +1);   // item available
-                fanout++;
-                if (_sig > 0) ::kill(q.pid, _sig); // notify recipient process
-            }
-        }
-        bus_unlock();
-        return fanout; // number of queues that received the frame
-    }
-
-    int receive(Ethernet::Frame& out) {
-        if (!_bus || _me < 0) return -1;
-
-        //wait for one item in queue
-        sem_add(sem_q(_me), -1);
-
-        auto& q = _bus->q[_me];
-        Ethernet::Frame f{};
-        if (!dequeue(q, f)) return -1;
-
-        out = f; // copy whole frame
-        return 1; // success
-    }
-
-
-    //no use this, use signal to notify
-    int start() { return 0; }
+protected:
+    void on_receive_msg(int msg_len, char* msg) override;
 
 private:
     // Registration
@@ -199,11 +134,12 @@ private:
     
 
 private:
-    int      _shm{-1};
-    int      _sem{-1};
-    ShmBus*  _bus{nullptr};
-    int      _me{-1};
-    Address  _addr{};       // optional local MAC if your NIC uses it
-    NIC*     _nic{nullptr}; // back-pointer for compatibility
-    int      _sig{SIGUSR1}; // POSIX signal for notification
+    std::atomic<bool> _running{false};
+    RawRxHandler _raw_rx;
+
+    const char* _shm_name;
+    bool  _is_master;
+    int   _nodes;
 };
+
+#endif // ENGINE_SHM_H
