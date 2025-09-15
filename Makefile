@@ -41,11 +41,6 @@ run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
 
-build/x86/%.o: src/%.cpp
-	@mkdir -p $(dir $@)
-	@echo cc $<
-	$(CXX_X86) $(CXXFLAGS) -c $< -o $@
-
 build/riscv/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	@echo cc $<
