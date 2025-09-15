@@ -17,7 +17,6 @@ OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
 all: clean riscv clean_build cpio run_vms
 
-
 clean:
 	rm -rf build bin
 	@echo clean all
@@ -34,6 +33,8 @@ clean_build:
 cpio:
 	@echo generating cpio...
 	@cp bin/main-riscv busybox/main
+	@sed -i 's/\r$$//' busybox/init # garante LF
+	@chmod +x busybox/init
 	@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
 
 run_vms:
@@ -51,7 +52,4 @@ build/riscv/%.o: src/%.cpp
 	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
 
 
-
-
-
-.PHONY: all x86 riscv clean help
+.PHONY: all x86 riscv clean clean_build cpio run_vms help

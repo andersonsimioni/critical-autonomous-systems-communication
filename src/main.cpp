@@ -1,6 +1,6 @@
-#include "gateway.h"
+#include "car.h"
 
 int main(int argc, char** argv) {
-    Gateway g;
-    g.start();
+    Car* my_car = new Car();
+    my_car->start();
 }
