@@ -25,6 +25,7 @@ echo 'mount -t proc proc /proc' >> init
 #echo 'exec /bin/sh' >> init
 echo 'mkdir -p /dev/shm' >> init
 echo 'mount -t tmpfs -o mode=1777,size=1G tmpfs /dev/shm' >> init
+echo 'ip link set dev eth0 up' >> init
 echo './main' >> init
 
 chmod +x init
@@ -33,3 +34,5 @@ chmod +x main
 cp ../../bin/main-riscv ./main
 find . | cpio -o -H newc > ../../initramfs.cpio 
 cd ../../
+
+rm -rf busybox
