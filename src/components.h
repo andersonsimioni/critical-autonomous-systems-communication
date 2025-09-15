@@ -4,8 +4,6 @@
 #include "utils.h"
 #include <cstdio>
 
-
-
 // ---- Powertrain ----
 // Periodically publishes RPM to broadcast (Ethernet) and listens for control.
 
@@ -14,19 +12,18 @@ class PowertrainComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
-    PowertrainComponent(uint16_t port) : Base(port, "Powertrain") {}
+    PowertrainComponent(typename Base::CommunicatorT* comm, uint16_t port)
+    : Base(comm, port, "Powertrain") {}
 
 protected:
-
-    bool wants_tick() override { return true; }
-    unsigned tick_period_ms() override { return 2000; } // every 2s
+    bool wants_tick() const override { return true; }
+    unsigned tick_period_ms() const override { return 2000; } // every 2s
 
     void on_tick() override {
-        /* _rpm = (_rpm + 300) % 6000;
+        _rpm = (_rpm + 300) % 6000;
         char msg[64];
         std::snprintf(msg, sizeof(msg), "time=%llu rpm=%u torque=%u", get_microseconds_now(), _rpm, 250u);
-        Base::send_broadcast(msg, std::strlen(msg)); */
-        //Base::send_local("Hello");
+        Base::send_broadcast(msg, std::strlen(msg));
     }
 
     void on_receive(const Rx& rx) override {
@@ -47,8 +44,8 @@ class BrakeComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
-    BrakeComponent(uint16_t port)
-    : Base(port, "Brake") {}
+    BrakeComponent(typename Base::CommunicatorT* comm, uint16_t port)
+    : Base(comm, port, "Brake") {}
 
 protected:
     void on_receive(const Rx& rx) override {

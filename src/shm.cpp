@@ -1,4 +1,20 @@
-/* #include <string>
+// mini_bc.cpp — POSIX shm + semáforos nomeados. Enxuto, com bc_send/bc_recv.
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/shm.h>
+#include <semaphore.h>
+#include <unistd.h>
+#include <time.h>
+#include <pthread.h>
+#include "string.h"
+#include <string>
 #include <iostream>
 #include "shm_node.h"
 
@@ -41,4 +57,3 @@ int main(int arg_c, char** arg_v){
     //shm_unlink(shm_name);    
     return 0;
 }
- */
