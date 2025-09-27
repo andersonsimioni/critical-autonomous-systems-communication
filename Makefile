@@ -22,11 +22,6 @@ clean:
 	rm -rf build bin
 	@echo clean all
 
-cpio:
-	@echo generating cpio...
-	@cd busybox/_install && find . | cpio -o -H newc | gzip > ../../initramfs.cpio.gz
-	
-
 riscv: $(OBJ_RISCV)
 	@echo compile for riscv64 now...
 	@mkdir -p bin
@@ -36,14 +31,19 @@ clean_build:
 	rm -rf build
 	@echo clean build	
 
-build/riscv/%.o: src/%.cpp
-	@mkdir -p $(dir $@)
-	@echo cc $<
-	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
+cpio:
+	@echo generating cpio...
+	@cd busybox/_install && find . | cpio -o -H newc | gzip > ../../initramfs.cpio.gz
 
 run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
+	
+
+build/riscv/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	@echo cc $<
+	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
 
 x86: $(OBJ_X86)
 	@echo compiling for x86...
