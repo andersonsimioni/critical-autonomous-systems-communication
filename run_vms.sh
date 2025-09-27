@@ -3,10 +3,10 @@
 # Script for multiple VMs at QEMU
 # ---------------------------------
 
-set -e  # exit if fail
+set -e  # in case it failes
 
 # Paths
-KERNEL="bzImage"         # precisa compilar kernel x86 (make bzImage)
+KERNEL="Image"
 INITRD="initramfs.cpio"
 
 # Multicast
@@ -14,7 +14,8 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 
 # VMs
-NUM_VMS=2
+NUM_VMS=5
+
 
 # Finds available terminal
 if command -v xterm &>/dev/null; then
@@ -27,7 +28,7 @@ elif command -v mate-terminal &>/dev/null; then
     TERM_CMD="mate-terminal -e"
 else
     echo "[INFO] Nenhum emulador gráfico encontrado. Rodando todas as VMs no mesmo terminal..."
-    TERM_CMD=""
+    TERM_CMD=""  
 fi
 
 # Loop for VMs
@@ -36,28 +37,34 @@ for i in $(seq 0 $((NUM_VMS-1))); do
     echo "[INFO] Iniciando VM $i com MAC $MAC"
 
     if [ -z "$TERM_CMD" ]; then
-        qemu-system-x86_64 \
+        # No terminal found, uses same terminal for all vms
+        qemu-system-riscv64 \
+            -machine virt \
+            -nographic \
             -m 1024 \
             -kernel "$KERNEL" \
             -initrd "$INITRD" \
-            -nographic \
-            -append "console=ttyS0 init=/init root=/dev/ram0 rw" \
+            -append "root=/dev/ram rw" \
             -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
-            -device e1000,netdev=vlan0,mac=$MAC &
+            -device virtio-net,id=eth0,netdev=vlan0,mac=$MAC &
     else
+        # Terminal found, each VMs is a new terminal
         $TERM_CMD "
-            qemu-system-x86_64 \
+            qemu-system-riscv64 \
+                -machine virt \
+                -nographic \
                 -m 1024 \
                 -kernel \"$KERNEL\" \
                 -initrd \"$INITRD\" \
-                -nographic \
-                -append \"console=ttyS0 init=/init root=/dev/ram0 rw\" \
+                -append \"root=/dev/ram rw\" \
                 -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
-                -device e1000,netdev=vlan0,mac=$MAC;
+                -device virtio-net,id=eth0,netdev=vlan0,mac=$MAC;
             exec bash
         " &
     fi
+        sleep 3
 done
 
+# Wait until every VM has started
 wait
 echo "[INFO] Todas as VMs foram finalizadas."
