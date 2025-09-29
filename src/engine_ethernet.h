@@ -30,6 +30,7 @@ public:
     Ethernet::Address mac() const;
 
 private:
+    void rx_loop();
     void on_packet();
     void close_safe();
     static bool address_to_bytes(const Ethernet::Address& a, std::array<uint8_t,6>& out);

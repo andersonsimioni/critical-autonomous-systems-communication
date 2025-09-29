@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <csignal>
+#include <thread>
 #include <semaphore.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -17,6 +18,7 @@
 
 // static
 EngineEthernet* EngineEthernet::instance_ = nullptr;
+std::thread rx_thread_;
 static sem_t packet_sem;
 
 EngineEthernet::EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0), running(true)
@@ -116,17 +118,21 @@ int EngineEthernet::send(const Ethernet::Frame& frame)
     return (sent < 0) ? -1 : static_cast<int>(sent > (ssize_t)sizeof(hdr) ? sent - sizeof(hdr) : 0);
 }
 
+// Receive loop
+void EngineEthernet::rx_loop() {
+    while (running) {
+        // This blocks until the semaphore is posted by SIGIO
+        sem_wait(&packet_sem);
+
+        if (!running) break;
+
+        on_packet(); // Drain all packets in the socket buffer
+    }
+}
+
 // Start
 int EngineEthernet::start() {
-    while (running) {
-        // Non-blocking check
-        if (sem_trywait(&packet_sem) == 0) {
-            // Semaphore was posted → new packet(s) available
-            if(instance_) instance_->on_packet();
-        }
-        // Sleep for polling the semaphore at regular intervals
-        usleep(1000);
-    }
+    rx_thread_ = std::thread([this] { rx_loop(); });
     return 0;
 }
 
