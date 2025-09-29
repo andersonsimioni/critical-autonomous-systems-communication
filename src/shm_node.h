@@ -2,12 +2,23 @@
 
 #include <unistd.h>
 #include <string>
+#include <pthread.h>
+#include <semaphore.h>
 
 #ifndef SHM_NODE_H
 #define SHM_NODE_H
 
 #define PAYLOAD 1500
 #define MAX_NODES 100
+
+// ring buffer
+#define MAX_MESSAGES 16
+
+struct Message {
+    int len;
+    char data[PAYLOAD];
+};
+//
 
 typedef struct {
     int parent_pid;
@@ -22,6 +33,16 @@ typedef struct {
     char bus[PAYLOAD];
     bool msg_available;
     unsigned int msg_len;
+
+    // ring buffer
+    Message messages[MAX_MESSAGES];
+    size_t head;  // next position to write
+    size_t tail;  // next position to read
+    bool full;
+
+    // semaphores for producer/consumer
+    sem_t sem_empty; // counts free slots
+    sem_t sem_full;  // counts occupied slots
 
     pthread_barrier_t all_read_done_barrier;
 } SharedData;

@@ -2,7 +2,6 @@ APP = main
 
 # compilers
 CXX_X86   = g++
-CXX_X86   = g++
 CXX_RISCV = riscv64-linux-gnu-g++
 
 # flags for compile and link
@@ -14,11 +13,9 @@ SRC = $(wildcard src/*.cpp)
 
 # objs for each arch
 OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
-OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
 all: clean riscv clean_build cpio run_vms
-
 
 clean:
 	rm -rf build bin
