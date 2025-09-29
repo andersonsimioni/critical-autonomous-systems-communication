@@ -58,7 +58,11 @@ public:
     {
         printf("initializing communicator..\n");
 
-        this->_ethernet_engine = new  EngineEthernet("eth0");
+        if (is_master_node)
+        {
+            this->_ethernet_engine = new EngineEthernet("eth0");
+        }
+        // this->_ethernet_engine = new  EngineEthernet("eth0");
         this->_shm_engine = new EngineShm("/shared_region_23984293", is_master_node, nodes_count);
         this->_my_mac = this->_ethernet_engine->mac();
 
@@ -75,7 +79,11 @@ public:
         this->_comm = new Communicator<NIC>(_protocol, me);
         this->_comm->set_up_port_observer(-1); 
 
-        _ethernet_engine->start();
+        if (is_master_node)
+        {
+            _ethernet_engine->start();
+        }
+        // _ethernet_engine->start();
         _shm_engine->start();
     }
 

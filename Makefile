@@ -2,6 +2,7 @@ APP = main
 
 # compilers
 CXX_X86   = g++
+CXX_X86   = g++
 CXX_RISCV = riscv64-linux-gnu-g++
 
 # flags for compile and link
@@ -12,6 +13,7 @@ LDFLAGS  = --static
 SRC = $(wildcard src/*.cpp)
 
 # objs for each arch
+OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_X86   = $(patsubst src/%.cpp, build/x86/%.o, $(SRC))
 OBJ_RISCV = $(patsubst src/%.cpp, build/riscv/%.o, $(SRC))
 
@@ -33,21 +35,27 @@ clean_build:
 
 cpio:
 	@echo generating cpio...
-	@bash ./initramfs_maker.sh
-	#@cp bin/main-riscv busybox/main
-	#@(cd busybox && find . | cpio -o -H newc) > initramfs.cpio
+	@cd busybox/_install && find . | cpio -o -H newc | gzip > ../../initramfs.cpio.gz
 
 run_vms:
 	@echo running vms...
 	@bash ./run_vms.sh
+	
 
 build/riscv/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	@echo cc $<
 	$(CXX_RISCV) $(CXXFLAGS) -c $< -o $@
 
+x86: $(OBJ_X86)
+	@echo compiling for x86...
+	@mkdir -p bin
+	$(CXX_X86) $(OBJ_X86) -o bin/$(APP)-x86 $(LDFLAGS)
+
+build/x86/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	@echo cc $<
+	$(CXX_X86) $(CXXFLAGS) -c $< -o $@
 
 
-
-
-.PHONY: all x86 riscv clean help
+.PHONY: all x86 clean help
