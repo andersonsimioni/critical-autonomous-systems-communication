@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <csignal>
+#include <semaphore.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -16,20 +17,21 @@
 
 // static
 EngineEthernet* EngineEthernet::instance_ = nullptr;
+static sem_t packet_sem;
 
-EngineEthernet::EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0)
+EngineEthernet::EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0), running(true)
 {
     if(!ifname || !*ifname) throw std::invalid_argument("empty ifname");
 
-    //open raw socket
+    //Open raw socket
     sock_ = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if(sock_ < 0) throw std::runtime_error("socket(AF_PACKET) failed");
 
-    //Get network interface index by name, ex: eth0 = 123
+    // Get network interface index by name, ex: eth0 = 123
     ifindex_ = if_nametoindex(ifname);
     if(ifindex_ == 0) { close_safe(); throw std::runtime_error("if_nametoindex failed"); }
 
-    //Get current MAC address
+    // Get current MAC address
     {
         struct ifreq ifr{};
         std::strncpy(ifr.ifr_name, ifname, IFNAMSIZ-1);
@@ -39,7 +41,7 @@ EngineEthernet::EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0)
         mac_ = Ethernet::Address(std::array<uint8_t,6>{mac_bytes_[0],mac_bytes_[1],mac_bytes_[2],mac_bytes_[3],mac_bytes_[4],mac_bytes_[5]});
     }
 
-    //Bind to interface
+    // Bind to interface
     {
         struct sockaddr_ll sll{};
         sll.sll_family = AF_PACKET;
@@ -52,19 +54,30 @@ EngineEthernet::EngineEthernet(const char* ifname) : sock_(-1), ifindex_(0)
         }
     }
 
-    //Enable async notifications (SIGIO) + non-blocking / without busy-wait
+    // Enable async notifications (SIGIO) + non-blocking / without busy-wait
     {
+        // Initialize semaphore with 0 tokens for incoming packet notification via signal
+        sem_init(&packet_sem, 0, 0);
+
+        // Set up SIGIO handler
+        struct sigaction sa{};
+        sa.sa_handler = EngineEthernet::sigio_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGIO, &sa, nullptr);
+
         fcntl(sock_, F_SETOWN, getpid());
         int flags = fcntl(sock_, F_GETFL, 0);
         if(flags < 0) flags = 0;
         fcntl(sock_, F_SETFL, flags | O_ASYNC | O_NONBLOCK);
-        std::signal(SIGIO, &EngineEthernet::sigio_handler);
         instance_ = this;
     }
 }
 
 EngineEthernet::~EngineEthernet()
 {
+    sem_destroy(&packet_sem);
+    running = false;
     instance_ = nullptr;
     close_safe();
 }
@@ -104,15 +117,26 @@ int EngineEthernet::send(const Ethernet::Frame& frame)
 }
 
 // Start
-int EngineEthernet::start() { return 0; }
+int EngineEthernet::start() {
+    while (running) {
+        // Non-blocking check
+        if (sem_trywait(&packet_sem) == 0) {
+            // Semaphore was posted → new packet(s) available
+            if(instance_) instance_->on_packet();
+        }
+        // Sleep for polling the semaphore at regular intervals
+        usleep(1000);
+    }
+    return 0;
+}
 
 // Get own MAC address
 Ethernet::Address EngineEthernet::mac() const { return mac_; }
 
-// SIGIO trampoline
-void EngineEthernet::sigio_handler(int)
-{
-    if(instance_) instance_->on_packet();
+// SIGIO
+void EngineEthernet::sigio_handler(int) {
+    //Async-signal-safe: just post the semaphore
+    sem_post(&packet_sem);
 }
 
 // Drain all available frames and forward to NIC

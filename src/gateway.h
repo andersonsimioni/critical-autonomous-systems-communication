@@ -81,7 +81,7 @@ protected:
         std::string msg = "PING";
 
         // Send to broadcast
-        this->_comm->send(this->_local, msg);
+        this->_comm->send(this->_to_bcast, msg);
     }
 
 private:

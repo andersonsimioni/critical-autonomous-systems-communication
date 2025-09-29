@@ -41,6 +41,7 @@ private:
     std::array<uint8_t,6>    mac_bytes_{};
     Ethernet::Address        mac_;
     static EngineEthernet*   instance_;
+    bool                     running{true};
 };
 
 #endif // ENGINE_ETHERNET_H
