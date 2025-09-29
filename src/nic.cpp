@@ -7,7 +7,7 @@ NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_e
 
 int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) {
     if(this->shm_engine == nullptr) printf("SHM Engine not found!\n");
-    if(this->ethernet_engine == nullptr) printf("ETHERNET Engine not found!\n");
+    // if(this->ethernet_engine == nullptr) printf("ETHERNET Engine not found!\n");
 
     Frame f;
     f.src = mac;
