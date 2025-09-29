@@ -7,6 +7,15 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <atomic>
+#include <iostream>
+#include <cerrno>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "ethernet.h"
 #include "protocol.h"
@@ -40,22 +49,46 @@ public:
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
         set_up_port_observer(local.port);
+
+        // Open a log file per local endpoint (MAC and port-based name)
+        std::ostringstream fname;
+        const auto& mac = this->_local.mac.addr;
+        uint16_t id = (static_cast<uint16_t>(mac[4]) << 8) | mac[5];
+        fname << "vm_" << id << "_" << local.port << ".log";
+
+        if (mkdir("logs", 0755) != 0 && errno != EEXIST) {
+            throw std::runtime_error("Failed to create logs directory");
+        }
+
+        std::string full_path = "logs/" + fname.str();
+        std::cout << "[LOG] Creating log file at: " << full_path << "\n";
+        _log.open(full_path, std::ios::out | std::ios::app);
+
+        if (!_log.is_open()) {
+            throw std::runtime_error("Failed to open log file: " + fname.str());
+        } else {
+            std::cout << "[LOG] Successfully opened " << full_path << "\n";
+        }
     }
 
     ~Communicator() {
         if(_protocol && _obs) _protocol->detach(_obs);
         delete _obs;
-    }
-
-    void print_rx(const Rx& rx) {
-        std::string s(rx.payload.begin(), rx.payload.end());
-        std::cout << s << std::endl;
+        if (_log.is_open()) _log.close();
     }
 
     // route the send
-    // if mac == broadcast send through ethernet, else send shm
     int send(const Endpoint& to, const void* data, size_t len) {
-        return _protocol->send(_local, to, data, (unsigned)len);
+        uint64_t send_time = get_microseconds_now();
+        uint64_t id = _next_msg_id.fetch_add(1);
+
+        // Log
+        logf("[SEND t=%lu id=%lu]\n", send_time, id);
+
+        // Prepend ID header to payload
+        std::string payload = "ID=" + std::to_string(id) + " " + std::string(reinterpret_cast<const char*>(data), len);
+
+        return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), (unsigned)payload.size());
     }
 
     int send(const Endpoint& to, const std::string& s) {
@@ -88,19 +121,23 @@ private:
 
         void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len) override {
 
-            // Convert payload to string for printing
-            std::string msg(reinterpret_cast<const char*>(data), len);
-            
-            // Print sender info and message
-            printf("Received from %s:%u -> %s:%u: %s\n",
-                from.mac.str().c_str(), from.port,
-                to.mac.str().c_str(), to.port,
-                msg.c_str());
-
-            // Print receive timestamp
             uint64_t recv_time = get_microseconds_now();
-            printf("Time received: %lu us\n", recv_time);
+            std::string msg(reinterpret_cast<const char*>(data), len);
 
+            // Extract ID if present
+            long id = -1;
+            if (msg.rfind("ID=", 0) == 0) {
+                size_t space_pos = msg.find(' ');
+                if (space_pos != std::string::npos) {
+                    id = std::stol(msg.substr(3, space_pos - 3));
+                    msg = msg.substr(space_pos + 1); // strip ID
+                }
+            }
+
+            // Log
+            _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
+
+            // Deliver message
             Communicator::Rx rx;
             rx.from = from;
             rx.to = to;
@@ -110,6 +147,7 @@ private:
             _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
         }
+
     private:
         Communicator*  _owner;
         ChannelOrigin  _origin;
@@ -122,11 +160,36 @@ private:
         _cv.notify_one();
     }
 
-//private:
+    void logf(const char* fmt, uint64_t t, uint64_t id) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), fmt, t, id);
+        std::string line(buf);
+        // print to screen
+        printf("%s\n", line.c_str());
+        // also write to file
+        if (_log.is_open()) {
+            _log << line << "\n";
+            _log.flush();
+        }
+    }
+
+    template<typename... Args>
+    void logf(const char* fmt, Args... args) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), fmt, args...);
+        std::string line(buf);
+        // print to screen
+        printf("%s\n", line.c_str());
+        // also write to file
+        if (_log.is_open()) {
+            _log << line << "\n";
+            _log.flush();
+        }
+    }
+
 public:
     ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
-
     PortObserverImpl* _obs{nullptr};
 
     std::mutex              _mtx;
@@ -136,6 +199,8 @@ public:
 private:
     Observed<Rx, uint16_t> observed_;
     Rx scratch_;
+    std::atomic<uint64_t> _next_msg_id{0};
+    std::ofstream _log;
 
 public:
 

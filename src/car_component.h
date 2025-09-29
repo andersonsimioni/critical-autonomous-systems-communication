@@ -49,7 +49,7 @@ public:
     {
         while (this->wants_tick())
         {
-            sleep(this->tick_period_ms()/1000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(this->tick_period_ms()));
             this->on_tick();
         }
     }

@@ -36,6 +36,14 @@ public:
                     << "  payload=\"" << payload << "\""
                     << "  recv_time="<<get_microseconds_now()<<"\n";
 
+            // Strip ID header if present
+            if (payload.rfind("ID=", 0) == 0) {
+                size_t space_pos = payload.find(' ');
+                if (space_pos != std::string::npos) {
+                    payload = payload.substr(space_pos + 1); // Remove ID header
+                }
+            }
+
             // If message is READY, add at list
             if (payload == "READY") {
                 ready_nodes.insert(rx.from.mac.str());
@@ -69,21 +77,11 @@ protected:
     unsigned tick_period_ms() override { return 1000; }
 
     void on_tick() override {
-        static uint64_t seq_num = 0;  // persistent sequence number
-        seq_num++;
+        // Build payload
+        std::string msg = "PING";
 
-        // Extract machine ID from last two bytes of MAC
-        const auto& mac = this->_local.mac.addr;
-        uint16_t machine_id = (static_cast<uint16_t>(mac[4]) << 8) | mac[5];
-
-        // Get current timestamp in microseconds
-        uint64_t send_time = get_microseconds_now();
-
-        // Build message: ping[machine_id][seq_num] timestamp
-        char msg[128];
-        std::snprintf(msg, sizeof(msg), "ping[%u][%lu] %lu", machine_id, seq_num, send_time);
-
-        this->_comm->send(this->_local, msg, std::strlen(msg));
+        // Send to broadcast
+        this->_comm->send(this->_local, msg);
     }
 
 private:
