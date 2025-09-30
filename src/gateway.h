@@ -17,7 +17,7 @@ public:
     {
         printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
 
-        sem_init(this->sem_sync, 0, 0);
+        sem_init(&this->sem_sync, 0, 0);
 
         // Initialize communicators and protocol
         this->initialize_communicator(is_master_node, nodes_count);
@@ -26,7 +26,7 @@ public:
         this->_protocol->enable_sync(5, this->_local);
 
         // Wait for GO message via Communicator queue
-        sem_wait(&this->sem_sync)
+        sem_wait(&this->sem_sync);
         printf("[SYNC] Received GO. All VMs synced. Starting ticks.\n");
 
         printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
@@ -36,7 +36,7 @@ protected:
     bool wants_tick() override { return true; }
     unsigned tick_period_ms() override { return 1000; }
 
-    virtual void on_receive(const typename CommunicatorT::Rx& rx) 
+    void on_receive(const Rx& rx) override
     {
         std::string payload(rx.payload.begin(), rx.payload.end());
 
@@ -46,7 +46,7 @@ protected:
             if (space_pos != std::string::npos) payload = payload.substr(space_pos + 1);
         }
 
-        if (payload == "GO") sem_post(sem_sync);
+        if (payload == "GO") sem_post(&this->sem_sync);
     }
 
     void on_tick() override {
