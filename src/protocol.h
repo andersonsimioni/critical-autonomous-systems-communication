@@ -159,8 +159,8 @@ public:
         delete f;
     }
 
-    void enable_sync(int total_nodes, const Endpoint& local) {
-        _sync_total_nodes = total_nodes;
+    void enable_sync(int total_vms, const Endpoint& local) {
+        _sync_total_vms = total_vms;
         _sync_local = local;
         _sync_ready_nodes.clear();
 
@@ -175,7 +175,7 @@ public:
     void detach(PortObserver* po) { portObservers_.remove(po);   }
 
 //private:
-    int _sync_total_nodes{0};
+    int _sync_total_vms{0};
     Endpoint _sync_local{};
     std::set<std::string> _sync_ready_nodes;
 
@@ -193,9 +193,9 @@ public:
         else if(c.length == 2 && std::memcmp(c.payload.data(), "GO", 2) == 0) ctrl = ControlType::GO;
 
         // Sync logic
-        if(ctrl == ControlType::READY && _sync_total_nodes > 0) {
+        if(ctrl == ControlType::READY && _sync_total_vms > 0) {
             _sync_ready_nodes.insert(c.from.mac.str());
-            if((int)_sync_ready_nodes.size() == _sync_total_nodes)
+            if((int)_sync_ready_nodes.size() == _sync_total_vms)
             {
                 // All nodes ready: send GO
                 send_control(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port),

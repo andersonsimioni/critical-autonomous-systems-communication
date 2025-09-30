@@ -13,15 +13,15 @@ class Gateway : public CarComponent<TNIC> {
 public:
     Gateway(uint16_t port) : Base(port, "Gateway") {}
 
-    virtual void initialize(bool is_master_node, int total_vms) override
+    virtual void initialize(bool is_master_node, int nodes_count) override
     {
         printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
 
         // Initialize communicators and protocol
-        this->initialize_communicator(is_master_node, total_vms);
+        this->initialize_communicator(is_master_node, nodes_count);
 
         // Enable protocol-level sync
-        this->_protocol->enable_sync(total_vms, this->_local);
+        this->_protocol->enable_sync(5, this->_local);
 
         // Wait for GO message via Communicator queue
         bool synced = false;
@@ -55,6 +55,7 @@ protected:
 
         // Send to broadcast
         this->_comm->send(this->_to_bcast, msg);
+        //this->_comm->send(this->_local, msg);
     }
 
 private:

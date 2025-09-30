@@ -62,7 +62,7 @@ for i in $(seq 0 $((NUM_VMS-1))); do
             exec bash
         " &
     fi
-        sleep 3
+        #sleep 3
 done
 
 # Wait until every VM has started
