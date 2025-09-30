@@ -32,7 +32,11 @@ clean_build:
 
 cpio:
 	@echo generating cpio...
+	@cp bin/$(APP)-riscv busybox/_install/main
+	@chmod +x busybox/_install/main
 	@cd busybox/_install && find . | cpio -o -H newc | gzip > ../../initramfs.cpio.gz
+
+	@gunzip -c initramfs.cpio.gz > initramfs.cpio
 
 run_vms:
 	@echo running vms...
