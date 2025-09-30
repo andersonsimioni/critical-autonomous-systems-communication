@@ -5,6 +5,7 @@
 #include <cstring>
 #include <list>
 #include <vector>
+#include <set>
 
 #include "observer.h"
 #include "frame.h"
@@ -18,6 +19,7 @@
 // - Async path: NIC notifies this Protocol via Observer<Frame,ProtocolNumber>.
 // - Sync path: optional receive() helper (not used when fully async).
 // -----------------------------------------------------
+
 template <typename TNIC>
 class Protocol : public Observer<NetFrame, NetProtocolType> {
 public:
@@ -48,6 +50,13 @@ public:
         uint8_t data[MTU]; // use only "length" bytes
     } __attribute__((packed));
 
+    // Message type: control or data
+    enum class ControlType {
+        NONE,   // Not a control message
+        READY,
+        GO
+    };
+
     // Observers interested in a specific destination port (async API)
     class PortObserver {
     public:
@@ -57,18 +66,24 @@ public:
                                const Endpoint& to,
                                const uint8_t* data,
                                unsigned len) = 0;
+
+        virtual void on_control(ControlType type,
+                                const Endpoint& from,
+                                const Endpoint& to) {
+            // Default: ignore control messages
+            (void)type; (void)from; (void)to;
+        }
     };
 
 public:
-    Protocol(NIC* n, ProtocolNumber etherType) : nic(n), etherType_(etherType)
-    {
+    Protocol(NIC* n, ProtocolNumber etherType) : nic(n), etherType_(etherType) {
         // Subscribe this Protocol to NICs frame notifications
         nic->attach(this);
     }
 
     ~Protocol() {nic->detach(this);}
 
-    // Send from "from" to "to" (broadcast MAC is allowed)
+    // Send data payload from "from" to "to" (broadcast MAC is allowed)
     int send(const Endpoint& from, const Endpoint& to, const void* payload, unsigned size) {
         if(size > MTU) return -1;
 
@@ -83,6 +98,17 @@ public:
         std::memcpy(buffer, &pkt, sizeof(Header) + size);
 
         return nic->send(to.mac, etherType_, buffer, static_cast<unsigned>(sizeof(Header) + size));
+    }
+
+    // Send control message
+    int send_control(const Endpoint& from, const Endpoint& to, ControlType type) {
+        std::string msg;
+        switch(type) {
+            case ControlType::READY: msg = "READY"; break;
+            case ControlType::GO:    msg = "GO";    break;
+            default: return -1; // Invalid
+        }
+        return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
     }
 
     // Optional sync receive helper (not used in pure async mode)
@@ -133,11 +159,26 @@ public:
         delete f;
     }
 
+    void enable_sync(int total_nodes, const Endpoint& local) {
+        _sync_total_nodes = total_nodes;
+        _sync_local = local;
+        _sync_ready_nodes.clear();
+
+        // Mark self as ready
+        _sync_ready_nodes.insert(local.mac.str());
+        send_control(local, Endpoint(Ethernet::Address::BROADCAST(), local.port),
+                     ControlType::READY);
+    }
+
     // Allow upper layers to subscribe by destination port
     void attach(PortObserver* po) { portObservers_.push_back(po); }
     void detach(PortObserver* po) { portObservers_.remove(po);   }
 
 //private:
+    int _sync_total_nodes{0};
+    Endpoint _sync_local{};
+    std::set<std::string> _sync_ready_nodes;
+
     struct AsyncCapsule {
         Endpoint        from;
         Endpoint        to;
@@ -147,10 +188,25 @@ public:
     };
 
     void notify_by_port(const AsyncCapsule& c) {
-        for(auto* po : portObservers_) {
-            if(po && (po->port() == c.to.port || po->port() <= -1)) {
-                po->on_packet(c.from, c.to, c.payload.data(), c.length);
+        ControlType ctrl = ControlType::NONE;
+        if(c.length == 5 && std::memcmp(c.payload.data(), "READY", 5) == 0) ctrl = ControlType::READY;
+        else if(c.length == 2 && std::memcmp(c.payload.data(), "GO", 2) == 0) ctrl = ControlType::GO;
+
+        // Sync logic
+        if(ctrl == ControlType::READY && _sync_total_nodes > 0) {
+            _sync_ready_nodes.insert(c.from.mac.str());
+            if((int)_sync_ready_nodes.size() == _sync_total_nodes)
+            {
+                // All nodes ready: send GO
+                send_control(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port),
+                             ControlType::GO);
             }
+        }
+
+        for(auto* po : portObservers_) {
+            if(!po) continue;
+            if(ctrl != ControlType::NONE) po->on_control(ctrl, c.from, c.to);
+            else if(po->port() == c.to.port || po->port() <= -1) po->on_packet(c.from, c.to, c.payload.data(), c.length);
         }
     }
 
