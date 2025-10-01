@@ -354,8 +354,6 @@ x86/
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/
-!busybox/bin/
-!busybox/bin/*
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
@@ -720,6 +718,5 @@ FodyWeavers.xsd
 .vscode/launch.json
 .vscode/settings.json
 initramfs.cpio
-busybox/main
-init
-init
+
+
