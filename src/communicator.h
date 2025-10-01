@@ -150,9 +150,6 @@ private:
                 }
             }
             
-            // Log
-            _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
-
             // Deliver message
             Communicator::Rx rx;
             rx.from = from;
@@ -162,6 +159,10 @@ private:
 
             rx.SendedTimeStampUs = timestamp;
             rx.ReceiveTimeStampUs = get_microseconds_now();
+
+            // Log
+            _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
+            _owner->logf("[LATENCY t=%lu]\n", recv_time - timestamp);
 
             
             _owner->notify(rx, _port);
