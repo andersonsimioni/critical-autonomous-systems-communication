@@ -2,7 +2,8 @@
 
 Car::Car()
 {
-    this->components.push_back(new PowertrainComponent<NIC>(PORT));
+    this->components.push_back(new PowertrainComponent<NIC>(80));
+    // each component receive a different port
 }
 
 Car::~Car()
