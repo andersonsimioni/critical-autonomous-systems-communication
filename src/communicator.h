@@ -134,14 +134,6 @@ private:
             long id = -1;
             uint64_t timestamp = -1;
 
-            if (msg.rfind("ID=", 0) == 0) {
-                size_t space_pos = msg.find(' ');
-                if (space_pos != std::string::npos) {
-                    id = std::stol(msg.substr(3, space_pos - 3));
-                    msg = msg.substr(space_pos + 1); // strip ID
-                }
-            }
-
             if (msg.rfind("TS=", 0) == 0) {
                 size_t space_pos = msg.find(' ');
                 if (space_pos != std::string::npos) {
@@ -150,6 +142,14 @@ private:
                 }
             }
 
+            if (msg.rfind("ID=", 0) == 0) {
+                size_t space_pos = msg.find(' ');
+                if (space_pos != std::string::npos) {
+                    id = std::stol(msg.substr(3, space_pos - 3));
+                    msg = msg.substr(space_pos + 1); // strip ID
+                }
+            }
+            
             // Log
             _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
 
