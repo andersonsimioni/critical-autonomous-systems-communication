@@ -162,8 +162,7 @@ private:
 
             // Log
             _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
-            _owner->logf("[LATENCY t=%lu]\n", recv_time - timestamp);
-
+            _owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
             
             _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
