@@ -64,13 +64,13 @@ public:
         }
 
         std::string full_path = "logs/" + fname.str();
-        std::cout << "[LOG] Creating log file at: " << full_path << "\n";
+        //std::cout << "[LOG] Creating log file at: " << full_path << "\n";
         _log.open(full_path, std::ios::out | std::ios::app);
 
         if (!_log.is_open()) {
             throw std::runtime_error("Failed to open log file: " + fname.str());
         } else {
-            std::cout << "[LOG] Successfully opened " << full_path << "\n";
+            //std::cout << "[LOG] Successfully opened " << full_path << "\n";
         }
     }
 
