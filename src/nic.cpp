@@ -1,7 +1,7 @@
 #include "nic.h"
 
 NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_engine(ethernet_engine), shm_engine(shm_engine), mac(addr) {
-    ethernet_engine->bindNIC(this);
+    if(ethernet_engine != NULL) ethernet_engine->bindNIC(this);
     shm_engine->bindNIC(this);
 }
 
