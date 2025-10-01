@@ -36,6 +36,9 @@ public:
         typename Protocol<TNIC>::Endpoint      to;
         std::vector<uint8_t> payload;
         ChannelOrigin origin;
+        
+        uint64_t SendedTimeStampUs;
+        uint64_t ReceiveTimeStampUs;
     };
 
     /// @brief Use -1 for observe all ports
@@ -86,7 +89,10 @@ public:
         logf("[SEND t=%lu id=%lu]\n", send_time, id);
 
         // Prepend ID header to payload
-        std::string payload = "ID=" + std::to_string(id) + " " + std::string(reinterpret_cast<const char*>(data), len);
+        std::string payload = 
+            "TS=" + std::to_string(get_microseconds_now()) + " " +
+            "ID=" + std::to_string(id) + " " + 
+            std::string(reinterpret_cast<const char*>(data), len);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), (unsigned)payload.size());
     }
@@ -126,11 +132,21 @@ private:
 
             // Extract ID if present
             long id = -1;
+            uint64_t timestamp = -1;
+
             if (msg.rfind("ID=", 0) == 0) {
                 size_t space_pos = msg.find(' ');
                 if (space_pos != std::string::npos) {
                     id = std::stol(msg.substr(3, space_pos - 3));
                     msg = msg.substr(space_pos + 1); // strip ID
+                }
+            }
+
+            if (msg.rfind("TS=", 0) == 0) {
+                size_t space_pos = msg.find(' ');
+                if (space_pos != std::string::npos) {
+                    timestamp = std::stol(msg.substr(3, space_pos - 3));
+                    msg = msg.substr(space_pos + 1); // strip Timestamp
                 }
             }
 
@@ -143,6 +159,10 @@ private:
             rx.to = to;
             rx.payload.assign(data, data+len);
             rx.origin = _origin;
+
+            rx.SendedTimeStampUs = timestamp;
+            rx.ReceiveTimeStampUs = get_microseconds_now();
+
             
             _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
