@@ -155,7 +155,7 @@ void* receive_msg_routine(void* args)
         free(msg);
     }
 
-    /*
+    /* ENTREGA P2
     while (true)
     {
         //sleep(1);continue;
@@ -165,36 +165,6 @@ void* receive_msg_routine(void* args)
         while(!s->msg_available) pthread_cond_wait(&s->new_msg_cond, &s->new_msg_cond_mtx);
         pthread_mutex_unlock(&s->new_msg_cond_mtx);
 
-        pthread_mutex_lock(&s->bus_mtx);
-
-        // verifica se há mensagens
-        while(s->head != s->tail || s->full) {
-            int len = s->messages[s->tail].len;
-            char* msg = (char*)malloc(len);
-            memcpy(msg, s->messages[s->tail].data, len);
-
-            printf("[%d] [%d] consumiu mensagem: %.*s\n", 
-                   s->parent_pid, node->pid, len, msg);
-
-            node->on_receive_msg(len, msg);
-
-            // avança tail
-            s->tail = (s->tail + 1) % MAX_MESSAGES;
-            s->full = false;
-
-            free(msg);
-        }
-
-        // se a fila ficou vazia, limpa flag
-        if(s->head == s->tail && !s->full) {
-            pthread_mutex_lock(&s->new_msg_cond_mtx);
-            s->msg_available = false;
-            pthread_mutex_unlock(&s->new_msg_cond_mtx);
-        }
-
-        pthread_mutex_unlock(&s->bus_mtx);
-    
-        
         if(node->using_bus) continue;
         
         printf("[%d] [%d] new message arrived!\n", s->parent_pid, node->pid);
@@ -209,8 +179,9 @@ void* receive_msg_routine(void* args)
         pthread_barrier_wait(&s->all_read_done_barrier);
 
         node->on_receive_msg(s->msg_len, msg);
+    }
         
-    }*/
+    */
 }
 
 bool ShmNode::initialize_receive_msg_thread()
@@ -233,11 +204,10 @@ bool ShmNode::initialize_node()
 
 bool ShmNode::send_msg(int msg_len, const char* msg)
 {
-    /*printf("sending message: %s\n", msg);
+    /* ENTREGA P2
+    printf("sending message: %s\n", msg);
     printf("locking bus..\n");
     pthread_mutex_lock(&this->shared_data_ptr->bus_mtx);
-
-    //isso foi excluido
     this->using_bus = true;
 
     printf("writing message..\n");
@@ -252,22 +222,20 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     pthread_cond_broadcast(&this->shared_data_ptr->new_msg_cond);
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
 
-    // isso foi excluido
     printf("waiting for all read done barrier..\n");
     pthread_barrier_wait(&this->shared_data_ptr->all_read_done_barrier);
     printf("all nodes read the message\n");
 
-    // isso foi excluido
     printf("setting msg_available = false\n");
     pthread_mutex_lock(&this->shared_data_ptr->new_msg_cond_mtx);
     this->shared_data_ptr->msg_available = false;
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
-    this->using_bus = false;
 
+    this->using_bus = false;
     printf("unlocking bus..\n");
     pthread_mutex_unlock(&this->shared_data_ptr->bus_mtx);
 
-    return true;  */
+    return true; */
 
     SharedData* s = this->shared_data_ptr;
 
