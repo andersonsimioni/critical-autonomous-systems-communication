@@ -1,1 +1,1 @@
-cmd_networking/built-in.o :=  rm -f networking/built-in.o; riscv64-linux-gnu-ar rcs networking/built-in.o
+cmd_networking/built-in.o :=  rm -f networking/built-in.o; ar rcs networking/built-in.o

@@ -69,8 +69,6 @@
 /bin/ln
 /usr/bin/logname
 /bin/ls
-/usr/bin/md5sum
-/usr/bin/sha1sum
 /usr/bin/sha3sum
 /usr/bin/sha256sum
 /usr/bin/sha512sum
@@ -270,7 +268,6 @@
 /sbin/route
 /sbin/slattach
 /usr/bin/ssl_client
-/sbin/tc
 /usr/bin/tcpsvd
 /usr/bin/udpsvd
 /usr/bin/telnet
