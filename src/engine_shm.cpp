@@ -116,7 +116,7 @@ void EngineShm::on_receive_msg(int msg_len, char* msg) {
     {
         Ethernet::Frame f{};
         if (deserialize_frame(msg, static_cast<size_t>(msg_len), f)) {
-            static_cast<NIC*>(this->nic)->on_frame(f);
+            static_cast<NIC*>(this->nic)->on_shm_frame(f);
             return;
         }
     }

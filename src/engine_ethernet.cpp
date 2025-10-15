@@ -172,7 +172,7 @@ void EngineEthernet::on_packet()
         f.size = static_cast<unsigned>(plen);
         std::memcpy(f.data, buf + sizeof(hdr), plen);
 
-        if(nic) nic->on_frame(f);
+        if(nic) nic->on_eth_frame(f);
     }
 }
 

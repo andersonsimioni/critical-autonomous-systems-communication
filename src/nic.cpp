@@ -1,4 +1,5 @@
 #include "nic.h"
+#include "communicator.h"
 
 NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_engine(ethernet_engine), shm_engine(shm_engine), mac(addr) {
     if(ethernet_engine != NULL) ethernet_engine->bindNIC(this);
@@ -6,9 +7,6 @@ NIC::NIC(Engine* ethernet_engine, Engine* shm_engine, Address addr) : ethernet_e
 }
 
 int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) {
-    if(this->shm_engine == nullptr) printf("SHM Engine not found!\n");
-    // if(this->ethernet_engine == nullptr) printf("ETHERNET Engine not found!\n");
-
     Frame f;
     f.src = mac;
     f.dst = dst;
@@ -17,18 +15,40 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     std::memcpy(f.data, data, size);
 
     const bool is_shm = (dst == this->address());
-    printf(is_shm ? "NIC sending through SHM\n" : "NIC sending through ETHERNET\n");
-    return is_shm ? this->shm_engine->send(f) : this->ethernet_engine->send(f);
+    if (is_shm) {
+        if (!this->shm_engine) { printf("SHM engine missing!\n"); return -1; }
+        printf("NIC sending through SHM\n");
+        return this->shm_engine->send(f);
+    } else {
+        if (!this->ethernet_engine) {
+            // Defensive: print clear error — components shouldn't attempt direct Ethernet
+            fprintf(stderr, "NIC::send(): no ethernet engine available for dst=%s; intended for gateway forwarding\n", dst.str().c_str());
+            return -2;
+        }
+        printf("NIC sending through ETHERNET\n");
+        return this->ethernet_engine->send(f);
+    }
 }
 
-// called by Engine when a frame is ready
-void NIC::on_frame(const Frame& f) {
+// called by Ethernet Engine when a frame is ready
+void NIC::on_eth_frame(const Frame& f) {
     // Ignore frames sent by myself
     // if(f.src == mac) return;
 
     // Copy frame and notify all observers registered on this NIC
     Frame* copy = new Frame(f);
-    this->notify(f.proto, copy);
+    this->notify(f.proto, copy, ChannelOrigin::Ethernet);
+}
+
+
+// called by SHM Engine when a frame is ready
+void NIC::on_shm_frame(const Frame& f) {
+    // Ignore frames sent by myself
+    // if(f.src == mac) return;
+
+    // Copy frame and notify all observers registered on this NIC
+    Frame* copy = new Frame(f);
+    this->notify(f.proto, copy, ChannelOrigin::SharedMemory);
 }
 
 const NIC::Address& NIC::address() const {

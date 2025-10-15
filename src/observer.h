@@ -5,13 +5,16 @@
 #include <mutex>
 #include <condition_variable>
 
+// packet origin
+enum class ChannelOrigin : unsigned char { Ethernet = 0, SharedMemory = 1 };
+
 // -----------------------------------------------------
 // Basic Observer interface
 // -----------------------------------------------------
 template <typename T, typename C = void>
 class Observer {
 public:
-    virtual void update(C c, T* data) = 0;
+    virtual void update(C c, T* data, ChannelOrigin origin) = 0;
 };
 
 // -----------------------------------------------------
@@ -23,8 +26,8 @@ public:
     void attach(Observer<T,C>* o) { observers.push_back(o); }
     void detach(Observer<T,C>* o) { observers.remove(o); }
 
-    void notify(C c, T* d) {
-        for(auto* o : observers) o->update(c,d);
+    void notify(C c, T* d, ChannelOrigin origin) {
+        for(auto* o : observers) o->update(c,d,origin);
     }
 private:
     std::list<Observer<T,C>*> observers;

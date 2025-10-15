@@ -60,12 +60,15 @@ public:
     // Observers interested in a specific destination port (async API)
     class PortObserver {
     public:
+        ChannelOrigin origin;  // store the observer’s channel
+        PortObserver(ChannelOrigin o) : origin(o) {}
         virtual ~PortObserver() = default;
         virtual Port port() const = 0;
         virtual void on_packet(const Endpoint& from,
                                const Endpoint& to,
                                const uint8_t* data,
-                               unsigned len) = 0;
+                               unsigned len,
+                               ChannelOrigin origin_of_packet) = 0;
 
         virtual void on_control(ControlType type,
                                 const Endpoint& from,
@@ -112,7 +115,7 @@ public:
     }
 
     // Optional sync receive helper (not used in pure async mode)
-    int receive(Endpoint& from, Endpoint& to, void* out, unsigned outSize) {
+/*     int receive(Endpoint& from, Endpoint& to, void* out, unsigned outSize) {
         Address srcMac; ProtocolNumber pnum;
         uint8_t buffer[sizeof(Header) + MTU];
 
@@ -130,10 +133,10 @@ public:
         from = Endpoint(srcMac, hdr.srcPort);
         to = Endpoint(nic->address(), hdr.dstPort);
         return static_cast<int>(payloadLen);
-    }
+    } */
 
     // Observer callback from NIC (async path).
-    void update(ProtocolNumber pnum, Frame* f) override {
+    void update(ProtocolNumber pnum, Frame* f, ChannelOrigin origin) override {
         if(!f) return;
         if(pnum != etherType_) { delete f; return; }
         if(f->size <= sizeof(Header)) { delete f; return; }
@@ -147,6 +150,7 @@ public:
         cap.to = Endpoint(f->dst, hdr.dstPort);
         cap.length = static_cast<uint16_t>(payloadLen);
         cap.proto = pnum;
+        cap.origin = origin;
 
         if(payloadLen > 0) {
             cap.payload.resize(payloadLen);
@@ -166,8 +170,8 @@ public:
 
         // Mark self as ready
         _sync_ready_nodes.insert(local.mac.str());
-        send_control(local, Endpoint(Ethernet::Address::BROADCAST(), local.port),
-                     ControlType::READY);
+        /* send_control(local, Endpoint(Ethernet::Address::BROADCAST(), local.port),
+                     ControlType::READY); */
     }
 
     // Allow upper layers to subscribe by destination port
@@ -184,13 +188,23 @@ public:
         Endpoint        to;
         uint16_t        length{0};
         ProtocolNumber  proto{0};
+        ChannelOrigin   origin;
         std::vector<uint8_t> payload;
     };
 
     void notify_by_port(const AsyncCapsule& c) {
+        std::string msg(reinterpret_cast<const char*>(c.payload.data()), c.length);
+        for (unsigned i = 0; i < c.length; ++i) {
+            printf("%02X ", c.payload[i]);
+        }
+        printf("\n");
+
         ControlType ctrl = ControlType::NONE;
-        if(c.length == 5 && std::memcmp(c.payload.data(), "READY", 5) == 0) ctrl = ControlType::READY;
-        else if(c.length == 2 && std::memcmp(c.payload.data(), "GO", 2) == 0) ctrl = ControlType::GO;
+        if(c.length >= 5 && std::memcmp(c.payload.data(), "READY", 5) == 0) {
+            ctrl = ControlType::READY;
+        }
+        else if(c.length >= 2 && std::memcmp(c.payload.data(), "GO", 2) == 0)
+            ctrl = ControlType::GO;
 
         // Sync logic
         if(ctrl == ControlType::READY && _sync_total_vms > 0) {
@@ -198,15 +212,17 @@ public:
             if((int)_sync_ready_nodes.size() == _sync_total_vms)
             {
                 // All nodes ready: send GO
+                printf("[DEBUG] [%d] of [%d] VMs ready, sending GO\n", (int)_sync_ready_nodes.size(), _sync_total_vms);
                 send_control(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port),
                              ControlType::GO);
             }
         }
 
         for(auto* po : portObservers_) {
+            printf("[DEBUG] Forwarding to port [%d]\n", po->port());
             if(!po) continue;
             if(ctrl != ControlType::NONE) po->on_control(ctrl, c.from, c.to);
-            else if(po->port() == c.to.port || po->port() <= -1) po->on_packet(c.from, c.to, c.payload.data(), c.length);
+            else if(po->port() == c.to.port || po->port() <= -1) po->on_packet(c.from, c.to, c.payload.data(), c.length, c.origin);
         }
     }
 

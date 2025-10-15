@@ -1,9 +1,11 @@
 #include "car.h"
+#include "ports.h"
 
 Car::Car()
 {
-    this->components.push_back(new PowertrainComponent<NIC>(80));
-    // each component receive a different port
+    this->components.push_back(new PowertrainComponent<NIC>(POWERTRAIN_PORT));
+    this->components.push_back(new BrakeComponent<NIC>(BRAKE_PORT));
+    // each component receives a different port
 }
 
 Car::~Car()
@@ -14,7 +16,7 @@ Car::~Car()
 void Car::start()
 {
     int components_len = this->components.size();
-    Gateway<NIC>* gateway = new Gateway<NIC>(PORT);
+    Gateway<NIC>* gateway = new Gateway<NIC>(GATEWAY_PORT);
 
     gateway->initialize(true, components_len);
     

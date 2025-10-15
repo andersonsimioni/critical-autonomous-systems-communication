@@ -22,7 +22,8 @@ public:
 
     int send(Address dst, Protocol proto, const void* data, unsigned int size);
 
-    void on_frame(const Frame& f);
+    void on_eth_frame(const Frame& f);
+    void on_shm_frame(const Frame& f);
 
     const Address& address() const;
 

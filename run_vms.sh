@@ -48,17 +48,14 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
             &
     else
         # Cada VM em um terminal separado
-        $TERM_CMD "
-            qemu-system-x86_64 \
-                -m 1024 \
-                -kernel \"$KERNEL\" \
-                -initrd \"$INITRD\" \
-                -append \"console=ttyS0 rdinit=/init\" \
-                -nographic \
-                -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
-                -device e1000,netdev=vlan0,mac=$MAC;
-            exec bash
-        " &
+        $TERM_CMD qemu-system-x86_64 \
+            -m 1024 \
+            -kernel "$KERNEL" \
+            -initrd "$INITRD" \
+            -append "console=ttyS0 rdinit=/init" \
+            -nographic \
+            -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
+            -device e1000,netdev=vlan0,mac=$MAC &
     fi
     #sleep 3  # opcional: dá tempo de inicialização entre VMs
 done

@@ -21,6 +21,7 @@
 #include "communicator.h"
 #include "nic.h"
 #include "protocol.h"
+#include "ports.h"
 
 static constexpr NetProtocolType ETYPE = 0x123;
 static constexpr uint16_t PORT = 123;
@@ -43,7 +44,7 @@ public:
 
     virtual ~CarComponent() { stop(); }
 
-    void update(uint16_t port, Rx* rx) override { on_receive(*rx); }
+    void update(uint16_t port, Rx* rx, ChannelOrigin origin) override { on_receive(*rx, origin); }
 
     void on_tick_loop()
     {
@@ -65,10 +66,14 @@ public:
         this->_nic = new NIC(is_master_node ? this->_ethernet_engine : NULL, this->_shm_engine, this->_my_mac);
         this->_protocol = new Protocol<NIC>(_nic, ETYPE);
 
-        Protocol<NIC>::Endpoint me      { this->_my_mac, PORT };
-        Protocol<NIC>::Endpoint toBcast { Ethernet::Address::BROADCAST(), PORT };
+        Protocol<NIC>::Endpoint me         { this->_my_mac, _port };
+        Protocol<NIC>::Endpoint my_gateway { this->_my_mac, GATEWAY_PORT };
+        Protocol<NIC>::Endpoint my_brake   { this->_my_mac, BRAKE_PORT };
+        Protocol<NIC>::Endpoint toBcast    { Ethernet::Address::BROADCAST(), GATEWAY_PORT };
 
         this->_local    = me;
+        this->_to_gate  = my_gateway;
+        this->_to_brake = my_brake;
         this->_to_bcast = toBcast;
         
         // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
@@ -106,15 +111,26 @@ public:
     int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
     int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
     
-    int send_local(const void* p, size_t n)    { return _comm->send(_local, p, n); }
+    int send_local(const void* p, size_t n)    { return _comm->send(_to_gate, p, n); }
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
+
+    int send_fanout(const void* p, size_t n)    {
+        printf("[DEBUG] Fanning out message\n");
+        return _comm->send(_to_brake, p, n);
+    }
+    int send_fanout(const std::string& s)       { return send_fanout(s.data(), s.size()); }
 
     uint16_t port() const { return _port; }
     const std::string& name() const { return _name; }
 
 protected:
     // App-specific hooks
-    virtual void on_receive(const typename CommunicatorT::Rx& rx) { printf("message arrived\n"); }
+    virtual void on_receive(const typename CommunicatorT::Rx& rx, ChannelOrigin origin) {
+        // Default behavior
+        printf("[CarComponent] Received packet on port %u from %s\n",
+               rx.from.port,
+               origin == ChannelOrigin::Ethernet ? "Ethernet" : "SharedMemory");
+    }
     virtual bool wants_tick() { return true; }
     virtual unsigned tick_period_ms() { return 1000; }
     virtual void on_tick() {}
@@ -134,7 +150,7 @@ public:
     Protocol<NIC>* _protocol;
     Communicator<NIC>* _comm;
 
-    Endpoint _local{}, _to_bcast{};
+    Endpoint _local{}, _to_gate{}, _to_brake{}, _to_bcast{};
     std::string _name;
     uint16_t _port{0};
 

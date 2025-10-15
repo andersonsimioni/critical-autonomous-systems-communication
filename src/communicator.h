@@ -21,9 +21,6 @@
 #include "protocol.h"
 #include "utils.h"
 
-// packet origin
-enum class ChannelOrigin : unsigned char { Ethernet = 0, SharedMemory = 1 };
-
 template <typename TNIC>
 class Communicator {
 public:
@@ -37,7 +34,7 @@ public:
         std::vector<uint8_t> payload;
         ChannelOrigin origin;
         
-        uint64_t SendedTimeStampUs;
+        uint64_t SentTimeStampUs;
         uint64_t ReceiveTimeStampUs;
     };
 
@@ -45,14 +42,15 @@ public:
     /// @param port 
     void set_up_port_observer(uint16_t port)
     {
-        _obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
-        _protocol->attach(_obs);
+        _eth_obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
+        _protocol->attach(_eth_obs);
+
+        _shm_obs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, port);
+        _protocol->attach(_shm_obs);
     }
 
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
-        set_up_port_observer(local.port);
-
         // Open a log file per local endpoint (MAC and port-based name)
         std::ostringstream fname;
         const auto& mac = this->_local.mac.addr;
@@ -75,8 +73,12 @@ public:
     }
 
     ~Communicator() {
-        if(_protocol && _obs) _protocol->detach(_obs);
-        delete _obs;
+        if(_protocol) {
+            if(_eth_obs) _protocol->detach(_eth_obs);
+            if(_shm_obs) _protocol->detach(_shm_obs);
+        }
+        delete _eth_obs;
+        delete _shm_obs;
         if (_log.is_open()) _log.close();
     }
 
@@ -122,10 +124,13 @@ public:
 private:
     class PortObserverImpl : public ProtocolT::PortObserver {
     public:
-        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port) : _owner(owner), _origin(origin), _port(port) {}
+        PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port) : ProtocolT::PortObserver(origin), _owner(owner), _port(port) {}
         uint16_t port() const override { return _port; }
 
-        void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len) override {
+        void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len, ChannelOrigin origin_of_packet) override {
+
+            // Filter by observer's expected origin
+            if (this->origin != origin_of_packet) return;
 
             uint64_t recv_time = get_microseconds_now();
             std::string msg(reinterpret_cast<const char*>(data), len);
@@ -155,22 +160,22 @@ private:
             rx.from = from;
             rx.to = to;
             rx.payload.assign(data, data+len);
-            rx.origin = _origin;
+            rx.origin = origin_of_packet;
 
-            rx.SendedTimeStampUs = timestamp;
+            rx.SentTimeStampUs = timestamp;
             rx.ReceiveTimeStampUs = get_microseconds_now();
 
             // Log
             _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
             _owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
             
-            _owner->notify(rx, _port);
             _owner->enqueue(std::move(rx));
+            printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", origin_of_packet);
+            _owner->notify(rx, _port, origin_of_packet);
         }
 
     private:
         Communicator*  _owner;
-        ChannelOrigin  _origin;
         uint16_t       _port;
     };
 
@@ -185,7 +190,7 @@ private:
         snprintf(buf, sizeof(buf), fmt, t, id);
         std::string line(buf);
         // print to screen
-        printf("%s\n", line.c_str());
+        //printf("%s\n", line.c_str());
         // also write to file
         if (_log.is_open()) {
             _log << line << "\n";
@@ -210,7 +215,8 @@ private:
 public:
     ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
-    PortObserverImpl* _obs{nullptr};
+    PortObserverImpl* _eth_obs{nullptr};
+    PortObserverImpl* _shm_obs{nullptr};
 
     std::mutex              _mtx;
     std::condition_variable _cv;
@@ -226,8 +232,9 @@ public:
 
     void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
     void detach(Observer<Rx, uint16_t>* o)  { observed_.detach(o);  }
-    void notify(const Rx& rx, uint16_t port = 0) {
-        scratch_ = rx;
-        observed_.notify(port, &scratch_);
+    void notify(const Rx& rx, uint16_t port, ChannelOrigin origin) {
+        Rx copy = rx;  // make a local copy
+        observed_.notify(port, &copy, origin);
     }
+
 };
