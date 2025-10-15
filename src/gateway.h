@@ -114,9 +114,9 @@ private:
             typename Base::CommunicatorT::Rx msg;
             msg.from = from;
             msg.to = to;
-            msg.origin = ChannelOrigin::Ethernet;
+            msg.origin = origin;
             msg.payload.assign(data, data + len);
-            _parent->on_receive(msg, ChannelOrigin::Ethernet);
+            _parent->on_receive(msg, origin);
         }
 
         void on_control(typename Protocol<TNIC>::ControlType type,

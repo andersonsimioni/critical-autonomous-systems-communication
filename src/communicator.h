@@ -190,7 +190,7 @@ private:
         snprintf(buf, sizeof(buf), fmt, t, id);
         std::string line(buf);
         // print to screen
-        //printf("%s\n", line.c_str());
+        printf("%s\n", line.c_str());
         // also write to file
         if (_log.is_open()) {
             _log << line << "\n";
