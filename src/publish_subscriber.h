@@ -87,7 +87,7 @@ public:
 
         if (next_due == UINT64_MAX) 
         {
-            std::this_thread::sleep_for(1);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             return; // no subscriptions at all
         }
 
