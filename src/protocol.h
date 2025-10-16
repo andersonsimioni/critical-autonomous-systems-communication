@@ -35,6 +35,15 @@ public:
         Endpoint() = default;
         Endpoint(Address a, Port p) : mac(a), port(p) {}
         bool operator==(const Endpoint& o) const { return (mac == o.mac) && (port == o.port); }
+
+        static Endpoint endpoint_from_string(const std::string& s) {
+            auto pos = s.find_last_of(':');
+            if (pos == std::string::npos) return {};
+
+            std::string mac_str = s.substr(0, pos);
+            uint16_t port = static_cast<uint16_t>(std::stoi(s.substr(pos + 1)));
+            return Endpoint(Address::from_string(mac_str), port);
+        }
     };
 
     struct Header {

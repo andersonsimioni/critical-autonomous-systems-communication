@@ -66,6 +66,14 @@ protected:
             if (space_pos != std::string::npos) payload = payload.substr(space_pos + 1);
         }
 
+        if (auto p = payload.find("TO="); p != std::string::npos) 
+        {
+            std::string to = payload.substr(p + 3, payload.find(' ', p) - (p + 3));
+            Endpoint to_endpoint = Endpoint::endpoint_from_string(to);
+            this->_comm->send(to_endpoint, payload);
+        }
+
+
         if(rx.origin == ChannelOrigin::SharedMemory) {
             // Message from a local component: forward to other cars
             printf("[DEBUG] Received payload from shm, forwarding externally\n");

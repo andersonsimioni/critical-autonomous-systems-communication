@@ -31,6 +31,16 @@ public:
             std::snprintf(buf,sizeof(buf),"%02X:%02X:%02X:%02X:%02X:%02X", addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
             return std::string(buf);
         }
+
+        static Address from_string(const std::string& s) {
+            Address a;
+            unsigned int bytes[LENGTH];
+            if (std::sscanf(s.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x", &bytes[0], &bytes[1], &bytes[2], &bytes[3], &bytes[4], &bytes[5]) == 6)
+            {
+                for (int i = 0; i < LENGTH; ++i) a.addr[i] = static_cast<uint8_t>(bytes[i]);
+            }
+            return a;
+        }
     };
 
     // Ethernet protocol type (16 bits)
