@@ -76,6 +76,24 @@ public:
         return due;
     }
 
+    // Blocks until the time of the next due subscriber, avoiding busy waiting.
+    // It finds the smallest next_due_us among all active subscriptions
+    // and sleep until that time.
+    void wait_until_next_due() {
+        u64 next_due = UINT64_MAX;
+        u64 now_us = get_microseconds_now();
+
+        for (auto& [type, list] : subs_) for (auto& s : list) if (s.next_due_us < next_due) next_due = s.next_due_us;
+
+        if (next_due == UINT64_MAX) 
+        {
+            std::this_thread::sleep_for(1);
+            return; // no subscriptions at all
+        }
+
+        if (next_due > now_us) std::this_thread::sleep_for(std::chrono::microseconds(next_due - now_us));
+    }
+
 private:
     struct Subscription 
     {
