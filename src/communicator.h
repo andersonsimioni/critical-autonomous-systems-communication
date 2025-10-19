@@ -56,9 +56,8 @@ public:
 
         // Open a log file per local endpoint (MAC and port-based name)
         std::ostringstream fname;
-        const auto& mac = this->_local.mac.addr;
-        uint16_t id = (static_cast<uint16_t>(mac[4]) << 8) | mac[5];
-        fname << "vm_" << id << "_" << local.port << ".log";
+        uint8_t vm_id = _local.mac.addr[5];
+        fname << "vm_" << static_cast<int>(vm_id) << "_" << local.port << ".log";
 
         std::string full_path = std::string("/mnt/logs/") + fname.str();
         _log.open(full_path, std::ios::out | std::ios::app);
@@ -78,21 +77,25 @@ public:
     if (_log.is_open()) _log.close();
 }
 
-    // route the send
+    // Route the send
     int send(const Endpoint& to, const void* data, size_t len) {
         uint64_t send_time = get_microseconds_now();
         uint64_t id = _next_msg_id.fetch_add(1);
+        uint16_t my_port = _local.port;
+        uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
 
-        // Log
-        logf("[SEND t=%lu id=%lu]\n", send_time, id);
+        // Log the send info
+        logf("[SEND VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, my_port, send_time, id);
 
-        // Prepend ID header to payload
-        std::string payload = 
-            "TS=" + std::to_string(get_microseconds_now()) + " " +
-            "ID=" + std::to_string(id) + " " + 
+        // Prepend headers to payload so receiver can extract info
+        std::string payload =
+            "TS=" + std::to_string(send_time) + " " +
+            "VM=" + std::to_string(vm_id) + " " +
+            "PORT=" + std::to_string(my_port) + " " +
+            "ID=" + std::to_string(id) + " " +
             std::string(reinterpret_cast<const char*>(data), len);
 
-        return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), (unsigned)payload.size());
+        return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
 
     int send(const Endpoint& to, const std::string& s) {
@@ -131,25 +134,27 @@ private:
             uint64_t recv_time = get_microseconds_now();
             std::string msg(reinterpret_cast<const char*>(data), len);
 
-            // Extract ID if present
-            long id = -1;
+            // Extract timestamp, vm number, port and message id
             uint64_t timestamp = -1;
+            int vm_id = -1;
+            int src_port = -1;
+            long id = -1;
 
-            if (msg.rfind("TS=", 0) == 0) {
-                size_t space_pos = msg.find(' ');
-                if (space_pos != std::string::npos) {
-                    timestamp = std::stol(msg.substr(3, space_pos - 3));
-                    msg = msg.substr(space_pos + 1); // strip Timestamp
+            auto parse_field = [&](const std::string& prefix, auto& out) {
+                if (msg.rfind(prefix, 0) == 0) {
+                    size_t space_pos = msg.find(' ');
+                    if (space_pos != std::string::npos) {
+                        out = std::stoll(msg.substr(prefix.size(), space_pos - prefix.size()));
+                        msg = msg.substr(space_pos + 1); // strip the field
+                    }
                 }
-            }
+            };
 
-            if (msg.rfind("ID=", 0) == 0) {
-                size_t space_pos = msg.find(' ');
-                if (space_pos != std::string::npos) {
-                    id = std::stol(msg.substr(3, space_pos - 3));
-                    msg = msg.substr(space_pos + 1); // strip ID
-                }
-            }
+            // Parse known fields in order
+            parse_field("TS=", timestamp);
+            parse_field("VM=", vm_id);
+            parse_field("PORT=", src_port);
+            parse_field("ID=", id);
             
             // Deliver message
             Communicator::Rx rx;
@@ -162,8 +167,8 @@ private:
             rx.ReceiveTimeStampUs = get_microseconds_now();
 
             // Log
-            _owner->logf("[RECV t=%lu id=%ld]\n", recv_time, id);
-            _owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
+            _owner->logf("[RECV VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, src_port, recv_time, id);
+            //_owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
             
             _owner->enqueue(std::move(rx));
             printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", static_cast<int>(origin_of_packet));
