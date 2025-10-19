@@ -51,36 +51,32 @@ public:
 
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
+        // Mount a host-shared log directory
+        system("mkdir -p /mnt/logs && mount -t 9p -o trans=virtio hostshare /mnt/logs");
+
         // Open a log file per local endpoint (MAC and port-based name)
         std::ostringstream fname;
         const auto& mac = this->_local.mac.addr;
         uint16_t id = (static_cast<uint16_t>(mac[4]) << 8) | mac[5];
         fname << "vm_" << id << "_" << local.port << ".log";
 
-        if (mkdir("logs", 0755) != 0 && errno != EEXIST) {
-            throw std::runtime_error("Failed to create logs directory");
-        }
-
-        std::string full_path = "logs/" + fname.str();
-        //std::cout << "[LOG] Creating log file at: " << full_path << "\n";
+        std::string full_path = std::string("/mnt/logs/") + fname.str();
         _log.open(full_path, std::ios::out | std::ios::app);
 
         if (!_log.is_open()) {
             throw std::runtime_error("Failed to open log file: " + fname.str());
         } else {
-            //std::cout << "[LOG] Successfully opened " << full_path << "\n";
+            printf("[LOG] Successfully opened\n");
         }
     }
 
-    ~Communicator() {
-        if(_protocol) {
-            if(_eth_obs) _protocol->detach(_eth_obs);
-            if(_shm_obs) _protocol->detach(_shm_obs);
-        }
-        delete _eth_obs;
-        delete _shm_obs;
-        if (_log.is_open()) _log.close();
+~Communicator() {
+    if (_protocol) {
+        if (_eth_obs) { _protocol->detach(_eth_obs); delete _eth_obs; _eth_obs = nullptr; }
+        if (_shm_obs) { _protocol->detach(_shm_obs); delete _shm_obs; _shm_obs = nullptr; }
     }
+    if (_log.is_open()) _log.close();
+}
 
     // route the send
     int send(const Endpoint& to, const void* data, size_t len) {
@@ -170,7 +166,7 @@ private:
             _owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
             
             _owner->enqueue(std::move(rx));
-            printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", origin_of_packet);
+            printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", static_cast<int>(origin_of_packet));
             _owner->notify(rx, _port, origin_of_packet);
         }
 
@@ -185,6 +181,14 @@ private:
         _cv.notify_one();
     }
 
+    void log_line(const std::string& line) {
+        std::lock_guard<std::mutex> lk(_log_mtx);
+        if (_log.is_open()) {
+            _log << line << "\n";
+            _log.flush();
+        }
+    }
+
     void logf(const char* fmt, uint64_t t, uint64_t id) {
         char buf[256];
         snprintf(buf, sizeof(buf), fmt, t, id);
@@ -192,10 +196,7 @@ private:
         // print to screen
         printf("%s\n", line.c_str());
         // also write to file
-        if (_log.is_open()) {
-            _log << line << "\n";
-            _log.flush();
-        }
+        log_line(line);
     }
 
     template<typename... Args>
@@ -219,6 +220,7 @@ public:
     PortObserverImpl* _shm_obs{nullptr};
 
     std::mutex              _mtx;
+    std::mutex              _log_mtx;
     std::condition_variable _cv;
     std::queue<Rx>          _queue;
 

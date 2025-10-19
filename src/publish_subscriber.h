@@ -51,7 +51,7 @@ public:
 
         // list of types to check
         std::vector<VehicleDataType> types_to_check;
-        if (all_types) types_to_check.assign(capabilities_.begin(), capabilities_.end());
+        if (allTypes) types_to_check.assign(capabilities_.begin(), capabilities_.end());
         else types_to_check.push_back(type);
 
         u64 now_us = get_microseconds_now();

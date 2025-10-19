@@ -63,6 +63,7 @@ cpio:
 	@cp bin/$(APP)-x86 $(BUSYBOX_INSTALL)/main
 	@chmod +x $(BUSYBOX_INSTALL)/init
 	@chmod +x $(BUSYBOX_INSTALL)/main
+	@mkdir -p $(BUSYBOX_INSTALL)/logs
 	@cd $(BUSYBOX_INSTALL) && find . | cpio -o -H newc | gzip > ../../initramfs.cpio.gz
 	@gunzip -c initramfs.cpio.gz > $(INITRAMFS)
 	@echo "[CPIO] initramfs.cpio gerado com sucesso."

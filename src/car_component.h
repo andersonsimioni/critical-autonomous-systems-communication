@@ -11,6 +11,7 @@
 #include <chrono>
 #include <csignal>
 #include <unistd.h>
+#include <variant>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -41,6 +42,25 @@ public:
     using CommunicatorT = Communicator<TNIC>;
     using Rx = typename CommunicatorT::Rx;
 
+public:
+    using VehicleValue = std::variant<int, double, std::string, bool>;
+    struct VehicleData {
+        VehicleDataType type;
+        VehicleValue value;
+
+        VehicleData(VehicleDataType t, VehicleValue v) : type(t), value(std::move(v)) {}
+    };
+
+    // Convert custom data to string
+    std::string vehicle_data_to_string(const VehicleData& d) {
+        if (std::holds_alternative<int>(d.value)) return std::to_string(std::get<int>(d.value));
+        if (std::holds_alternative<double>(d.value)) return std::to_string(std::get<double>(d.value));
+        if (std::holds_alternative<std::string>(d.value)) return std::get<std::string>(d.value);
+        if (std::holds_alternative<bool>(d.value)) return std::get<bool>(d.value) ? "true" : "false";
+        return "<unknown>";
+    }
+
+public:
     CarComponent(uint16_t my_port, std::string name) : _name(std::move(name)), _port(my_port) {}
 
     virtual ~CarComponent() { stop(); }
@@ -93,7 +113,6 @@ public:
         initialize_communicator(is_master_node, nodes_count);
         printf("[CAR COMPONENT][%s] initialized!\n", this->name().c_str());
         
-        _pubSub = new PublishSubscriber();
         pthread_create(&_pubsub_thread, nullptr, pubsub_thread_entry, this);
 
         this->on_tick_loop();
@@ -118,18 +137,17 @@ public:
     void publisher_loop() {
         while (true) 
         {
-            pubsub.wait_until_next_due();
+            _pubSub.wait_until_next_due();
 
             for (auto& [type, data] : _data) {
-                auto due = pubsub.get_due_subscribers(type, false);
+                auto due = _pubSub.get_due_subscribers(type, false);
                 for (auto& who : due) {
                     printf("[SEND] to %s -> %d = ", who.c_str(), (int)type);
-                    send_fanout("TO=" + std::to_string(due) + " DATA=" + std::to_string(data));
+                    send_fanout("TO=" + who + " DATA=" + vehicle_data_to_string(data));
                 }
             }
         }
     }
-
 
     // Convenience send helpers
     int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
@@ -139,7 +157,7 @@ public:
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
 
     int send_fanout(const void* p, size_t n)    {
-        printf("[DEBUG] Fanning out message [%s]\n", p);
+        printf("[DEBUG] Fanning out message [%.*s]\n", (int)n, (const char*)p);
         return _comm->send(_to_brake, p, n);
     }
     int send_fanout(const std::string& s)       { return send_fanout(s.data(), s.size()); }
@@ -149,7 +167,24 @@ public:
 
 protected:
 
-    static bool digest_subs(const Rx& rx) {
+    pthread_t* receive_msg_thread;
+
+    Ethernet::Address _my_mac;
+    EngineShm* _shm_engine;
+    EngineEthernet* _ethernet_engine;
+    NIC* _nic;
+    Protocol<NIC>* _protocol;
+    Communicator<NIC>* _comm;
+
+    Endpoint _local{}, _to_gate{}, _to_brake{}, _to_bcast{};
+    std::string _name;
+    uint16_t _port{0};
+
+    PublishSubscriber _pubSub;
+    pthread_t _pubsub_thread;
+    std::unordered_map<VehicleDataType, VehicleData> _data;
+
+    bool digest_subs(const Rx& rx) {
         std::string s(rx.payload.begin(), rx.payload.end());
         size_t p1 = s.find("SUBS=");
         size_t p2 = s.find("SUBS_TYPE=");
@@ -161,11 +196,12 @@ protected:
         size_t e3 = s.find(' ', p3); if (e3 == std::string::npos) e3 = s.size();
 
         std::string addr  = s.substr(p1 + 5, e1 - (p1 + 5));
-        VehicleDataType dtype = std::stoi(s.substr(p2 + 10, e2 - (p2 + 10)));
-        u64 period = std::stoull(s.substr(p3 + 12, e3 - (p3 + 12)));
+        VehicleDataType dtype = static_cast<VehicleDataType>(
+            std::stoi(s.substr(p2 + 10, e2 - (p2 + 10)))
+        );
+        uint64_t period = std::stoull(s.substr(p3 + 12, e3 - (p3 + 12)));
 
-
-        if(this->_pubSub.supports(dtype)) this->_pubSub.subscribe(dtype, addr, period);
+        if(_pubSub.supports(dtype)) _pubSub.subscribe(dtype, addr, period);
 
         return true;
     }
@@ -185,33 +221,6 @@ protected:
         return {v.begin(), v.end()};
     }
 
-public:
-    using VehicleValue = std::variant<int, double, std::string, bool>;
-    struct VehicleData {
-        VehicleDataType type;
-        VehicleValue value;
-
-        VehicleData(VehicleDataType t, VehicleValue v) : type(t), value(std::move(v)) {}
-    };
-
-    pthread_t* receive_msg_thread;
-
-    Ethernet::Address _my_mac;
-    EngineShm* _shm_engine;
-    EngineEthernet* _ethernet_engine;
-    NIC* _nic;
-    Protocol<NIC>* _protocol;
-    Communicator<NIC>* _comm;
-
-    Endpoint _local{}, _to_gate{}, _to_brake{}, _to_bcast{};
-    std::string _name;
-    uint16_t _port{0};
-
-    PublishSubscriber _pubSub;
-    pthread_t _pubsub_thread;
-    std::unordered_map<VehicleDataType, VehicleData> _data;
-
-private:
     // Minimal SIGTERM handler to stop child threads cleanly
     static CarComponent*& self() { static CarComponent* s=nullptr; return s; }
     static void sigterm_handler(int){ if (self()) self()->_running.store(false); }

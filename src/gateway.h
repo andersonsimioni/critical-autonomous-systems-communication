@@ -15,6 +15,7 @@
 template <typename TNIC>
 class Gateway : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
+    using Endpoint = typename Base::Proto::Endpoint;
     using Rx   = typename Base::CommunicatorT::Rx;
     using Port = typename Protocol<TNIC>::Port;
 public:
@@ -58,7 +59,7 @@ protected:
     void on_receive(const Rx& rx, ChannelOrigin origin) override
     {
         std::string payload(rx.payload.begin(), rx.payload.end());
-        printf("[DEBUG] Gateway receiving message. Origin: [%d], [%d]\n", origin, rx.origin);
+        printf("[DEBUG] Gateway receiving message. Origin: [%d], [%d]\n", int(origin), int(rx.origin));
 
         // Remove ID header if present
         if (payload.rfind("ID=", 0) == 0) {
