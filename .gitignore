@@ -2,6 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,visualstudiocode,visualstudio,jetbrains,jetbrains+all,jetbrains+iml
 
 initramfs.cpio
+initramfs.cpio.gz
 
 ### C ###
 # Prerequisites
