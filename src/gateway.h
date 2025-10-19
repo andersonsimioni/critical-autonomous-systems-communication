@@ -133,7 +133,7 @@ private:
                         const typename Protocol<TNIC>::Endpoint& to) override
         {
             printf("[DEBUG] SyncObserver saw a message\n");
-            if(type == Protocol<TNIC>::ControlType::GO) {
+            if(type == Protocol<TNIC>::ControlType::GO || static_cast<int>(type) == 1){
                 printf("[DEBUG] SyncObserver saw GO\n");
                 _parent->notify_sync_done();
             }
