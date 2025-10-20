@@ -95,7 +95,7 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     # Store PID for later cleanup
     PIDS+=("$pid")
 
-    sleep 1
+    # sleep 1
 done
 
 if [ "$TIMEOUT" -gt 0 ]; then
@@ -125,7 +125,7 @@ if [ "$TIMEOUT" -gt 0 ]; then
             break
         fi
 
-        sleep 1
+        # sleep 1
     done
 else
     # Wait until all background jobs finish
