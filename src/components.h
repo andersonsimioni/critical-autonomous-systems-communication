@@ -66,9 +66,14 @@ protected:
 
     void on_tick() override {
         std::string payload = "brake!";
-        printf("[DEBUG] Brake component tick\n");
 
-        // Send to local gateway
-        Base::send_local(payload);
+        // Send 10 messagens for testing
+        for (int i = 0; i <= 10; i++) {        
+            
+            printf("[DEBUG] Brake component tick %d \n", i);
+            // Send to local gateway
+            Base::send_local(payload);
+        }
+
     }
 };
