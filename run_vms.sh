@@ -1,6 +1,7 @@
 #!/bin/bash
 # ---------------------------------
 # Script for multiple VMs at QEMU (x86_64)
+# Adds optional timeout to terminate VMs automatically
 # ---------------------------------
 
 set -e
@@ -11,11 +12,22 @@ MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
 NUM_VMS=5
 
+# Default timeout in seconds (0 = no timeout). Can be overridden by first numeric arg.
+TIMEOUT=0
+
+# If first argument is numeric, use it as timeout (seconds) and shift it out
+if [ "$#" -ge 1 ]; then
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+        TIMEOUT=$1
+        shift
+    fi
+fi
+
 # Host folder for logs
 LOGDIR=$(pwd)/logs
 mkdir -p "$LOGDIR"
 
-# Detect terminal
+# Detect terminal emulator to open each VM in its own window (optional)
 if command -v xterm &>/dev/null; then
     TERM_CMD="xterm -hold -e"
 elif command -v konsole &>/dev/null; then
@@ -29,6 +41,29 @@ else
     TERM_CMD=""
 fi
 
+# Array to store background PIDs (terminal processes or qemu processes)
+PIDS=()
+
+cleanup() {
+    echo "[INFO] Cleaning up VMs..."
+    for pid in "${PIDS[@]}"; do
+        if [ -z "$pid" ]; then
+            continue
+        fi
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "[INFO] Killing PID $pid"
+            kill "$pid" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "[INFO] Force killing PID $pid"
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+trap cleanup EXIT INT TERM
+
 for i in $(seq 0 $((NUM_VMS - 1))); do
     MAC="52:54:00:12:34:$(printf "%02x" $i)"
     echo "[INFO] Starting VM $i with MAC $MAC, logging to $LOGDIR/vm_$i.log"
@@ -37,33 +72,65 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     VM_LOGDIR="$LOGDIR/vm_$i"
     mkdir -p "$VM_LOGDIR"
 
+    # Build qemu command arguments into an array for safer handling
+    QEMU_CMD=(qemu-system-x86_64
+        -m 1024
+        -kernel "$KERNEL"
+        -initrd "$INITRD"
+        -append "console=ttyS0 rdinit=/init"
+        -nographic
+        -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare
+        -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT
+        -device e1000,netdev=vlan0,mac=$MAC)
+
     if [ -z "$TERM_CMD" ]; then
-        # single-terminal mode
-        qemu-system-x86_64 \
-            -m 1024 \
-            -kernel "$KERNEL" \
-            -initrd "$INITRD" \
-            -append "console=ttyS0 rdinit=/init" \
-            -nographic \
-            -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare \
-            -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
-            -device e1000,netdev=vlan0,mac=$MAC &
+        "${QEMU_CMD[@]}" &
+        pid=$!
     else
-        # each VM in its own terminal
-        $TERM_CMD qemu-system-x86_64 \
-            -m 1024 \
-            -kernel "$KERNEL" \
-            -initrd "$INITRD" \
-            -append "console=ttyS0 rdinit=/init" \
-            -nographic \
-            -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare \
-            -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT \
-            -device e1000,netdev=vlan0,mac=$MAC &
+        # Start qemu inside a new terminal; the PID we get is the terminal emulator process
+        $TERM_CMD "${QEMU_CMD[@]}" &
+        pid=$!
     fi
+
+    # Store PID for later cleanup
+    PIDS+=("$pid")
 
     sleep 1
 done
 
-wait
-echo "[INFO] All VMs have finished."
+if [ "$TIMEOUT" -gt 0 ]; then
+    echo "[INFO] Timeout set to ${TIMEOUT}s — VMs will be terminated after this period."
+    sleep "$TIMEOUT" &
+    SLEEP_PID=$!
+
+    # Monitor running VMs and the sleep timer
+    while true; do
+        any_running=false
+        for pid in "${PIDS[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                any_running=true
+                break
+            fi
+        done
+
+        # If no VM is running anymore, break
+        if [ "$any_running" = false ]; then
+            break
+        fi
+
+        # If sleep finished, timeout expired -> cleanup and break
+        if ! kill -0 "$SLEEP_PID" 2>/dev/null; then
+            echo "[INFO] Timeout reached — terminating VMs"
+            cleanup
+            break
+        fi
+
+        sleep 1
+    done
+else
+    # Wait until all background jobs finish
+    wait
+fi
+
+echo "[INFO] All VMs have finished or were terminated."
 echo "[INFO] Logs saved in $LOGDIR"
