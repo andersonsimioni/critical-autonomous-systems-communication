@@ -171,7 +171,7 @@ private:
             //_owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
             
             _owner->enqueue(std::move(rx));
-            printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", static_cast<int>(origin_of_packet));
+            //printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", static_cast<int>(origin_of_packet));
             _owner->notify(rx, _port, origin_of_packet);
         }
 
@@ -198,8 +198,8 @@ private:
         char buf[256];
         snprintf(buf, sizeof(buf), fmt, t, id);
         std::string line(buf);
-        // print to screen
-        printf("%s\n", line.c_str());
+        // print to screen (optional)
+        //printf("%s\n", line.c_str());
         // also write to file
         log_line(line);
     }
@@ -209,8 +209,8 @@ private:
         char buf[256];
         snprintf(buf, sizeof(buf), fmt, args...);
         std::string line(buf);
-        // print to screen
-        printf("%s\n", line.c_str());
+        // print to screen (optional)
+        //printf("%s\n", line.c_str());
         // also write to file
         if (_log.is_open()) {
             _log << line << "\n";

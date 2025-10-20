@@ -15,14 +15,14 @@ int EngineShm::start() {
 }
 
 int EngineShm::send(const Ethernet::Frame& frame) {
-    printf("serializing SHM Ethernet Frame..\n");
-    Ethernet::print_frame(frame);
+    //printf("serializing SHM Ethernet Frame..\n");
+    //Ethernet::print_frame(frame);
     auto blob = serialize_frame(frame);
     if (blob.empty()) { printf("SHM Ethernet Frame EMPTY!\n"); return -1; }
     if (blob.size() > PAYLOAD) { printf("SHM Ethernet Frame REACHED PAYLOAD LIMIT!\n"); return -2; }
 
-    printf("sending SHM Ethernet Frame..\n");
-    printf("packet: %.*s\n", (int)blob.size(), blob.data());
+    //printf("sending SHM Ethernet Frame..\n");
+    //printf("packet: %.*s\n", (int)blob.size(), blob.data());
     return ShmNode::send_msg(static_cast<int>(blob.size()), blob.data()) ? 0 : -3;
 }
 
@@ -93,8 +93,8 @@ bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame&
     }
 
     // Log final resumido
-    printf("[deserialize_frame] OK: len=%zu, payload=%u bytes, proto=0x%04X\n", 
-           len, out.size, static_cast<unsigned>(out.proto));
+    //printf("[deserialize_frame] OK: len=%zu, payload=%u bytes, proto=0x%04X\n", 
+    //       len, out.size, static_cast<unsigned>(out.proto));
 
     return true;
 }

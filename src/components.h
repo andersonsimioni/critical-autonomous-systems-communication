@@ -32,7 +32,7 @@ protected:
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
         // Example: accept commands addressed to this port (from gateway or others)
         auto s = Base::to_string(rx.payload);
-        std::cout<<"Received data: "<<s<<"\n";
+        //std::cout<<"Received data: "<<s<<"\n";
     }
 
 private:
@@ -53,11 +53,11 @@ public:
 protected:
 
     bool wants_tick() override { return true; }
-    unsigned tick_period_ms() override { return 5000; } // every 5s
+    unsigned tick_period_ms() override { return 2000; } // every 2s
 
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
         auto s = Base::to_string(rx.payload);
-        printf("[DEBUG] Brake component received a message!\n");
+        //printf("[DEBUG] Brake component received a message!\n");
         if (s == "brake!" || s == "hazard!") {
             std::string ack = "ack-brake";
             Base::send_local(ack);
@@ -67,7 +67,7 @@ protected:
     void on_tick() override {
         std::string payload = "brake!";
 
-        printf("[DEBUG] Brake component tick\n");
+        //printf("[DEBUG] Brake component tick\n");
         // Send to local gateway
         Base::send_local(payload);
         

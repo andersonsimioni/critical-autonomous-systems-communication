@@ -147,8 +147,8 @@ void* receive_msg_routine(void* args)
         }
 
         // process message outside lock
-        printf("[%d] [%d] consumiu mensagem: %.*s\n", 
-               s->parent_pid, node->pid, len, msg);
+        //printf("[%d] [%d] consumiu mensagem: %.*s\n", 
+        //       s->parent_pid, node->pid, len, msg);
 
         node->on_receive_msg(len, msg);
 
@@ -183,14 +183,14 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     // Wait for an empty slot (this blocks writer if buffer is full)
     sem_wait(&s->sem_empty);
 
-    printf("sending message: %s\n", msg);
-    printf("locking bus..\n");
+    //printf("sending message: %s\n", msg);
+    //printf("locking bus..\n");
     // acquire bus to write into buffer
     pthread_mutex_lock(&s->bus_mtx);
 
     size_t head = s->head;
 
-    printf("writing message..\n");
+    //printf("writing message..\n");
     // write in the slot
     if (msg_len > PAYLOAD) msg_len = PAYLOAD;
     s->messages[head].len = msg_len;
@@ -208,13 +208,13 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     s->head = head;
     s->full = (s->head == s->tail);
 
-    printf("unlocking bus..\n");
+    //printf("unlocking bus..\n");
     pthread_mutex_unlock(&s->bus_mtx);
 
     // signal that there's a new filled slot
     sem_post(&s->sem_full);
 
-    printf("broadcasting new message signal..\n");
+    //printf("broadcasting new message signal..\n");
     // maintain compatibility with existing condition variable approach
     pthread_mutex_lock(&s->new_msg_cond_mtx);
     s->msg_available = true;

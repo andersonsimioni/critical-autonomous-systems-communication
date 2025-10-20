@@ -157,7 +157,7 @@ public:
     int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
 
     int send_fanout(const void* p, size_t n)    {
-        printf("[DEBUG] Fanning out message [%.*s]\n", (int)n, (const char*)p);
+        //printf("[DEBUG] Fanning out message [%.*s]\n", (int)n, (const char*)p);
         return _comm->send(_to_brake, p, n);
     }
     int send_fanout(const std::string& s)       { return send_fanout(s.data(), s.size()); }

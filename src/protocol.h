@@ -203,10 +203,10 @@ public:
 
     void notify_by_port(const AsyncCapsule& c) {
         std::string msg(reinterpret_cast<const char*>(c.payload.data()), c.length);
-        for (unsigned i = 0; i < c.length; ++i) {
-            printf("%02X ", c.payload[i]);
-        }
-        printf("\n");
+        //for (unsigned i = 0; i < c.length; ++i) {
+        //    printf("%02X ", c.payload[i]);
+        //}
+        //printf("\n");
 
         ControlType ctrl = ControlType::NONE;
         if(c.length >= 5 && std::memcmp(c.payload.data(), "READY", 5) == 0) {
@@ -228,7 +228,7 @@ public:
         }
 
         for(auto* po : portObservers_) {
-            printf("[DEBUG] Forwarding to port [%d]\n", po->port());
+            //printf("[DEBUG] Forwarding to port [%d]\n", po->port());
             if(!po) continue;
             if(ctrl != ControlType::NONE) po->on_control(ctrl, c.from, c.to);
             else if(po->port() == c.to.port || po->port() <= -1) po->on_packet(c.from, c.to, c.payload.data(), c.length, c.origin);

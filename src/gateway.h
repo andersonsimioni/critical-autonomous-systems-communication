@@ -59,7 +59,7 @@ protected:
     void on_receive(const Rx& rx, ChannelOrigin origin) override
     {
         std::string payload(rx.payload.begin(), rx.payload.end());
-        printf("[DEBUG] Gateway receiving message. Origin: [%d], [%d]\n", int(origin), int(rx.origin));
+        //printf("[DEBUG] Gateway receiving message. Origin: [%d], [%d]\n", int(origin), int(rx.origin));
 
         // Remove ID header if present
         if (payload.rfind("ID=", 0) == 0) {
@@ -77,12 +77,12 @@ protected:
 
         if(rx.origin == ChannelOrigin::SharedMemory) {
             // Message from a local component: forward to other cars
-            printf("[DEBUG] Received payload from shm, forwarding externally\n");
+            //printf("[DEBUG] Received payload from shm, forwarding externally\n");
             this->_comm->send(this->_to_bcast, payload);
         }
         else if(rx.origin == ChannelOrigin::Ethernet) {
             // Message from another car: deliver to local components
-            printf("[DEBUG] Received payload from Ethernet, forwarding internally\n");
+            //printf("[DEBUG] Received payload from Ethernet, forwarding internally\n");
             Base::send_fanout(payload);
         }
     }
