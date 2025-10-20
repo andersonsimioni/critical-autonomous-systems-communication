@@ -3,6 +3,7 @@
 
 initramfs.cpio
 initramfs.cpio.gz
+latency_reports
 
 ### C ###
 # Prerequisites

@@ -20,13 +20,17 @@ INITRAMFS    = initramfs.cpio
 
 # Caminhos
 BUSYBOX_INSTALL = busybox/_install
+TOOLS_DIR       = tools
 
-# Alvo padrão: compila x86, gera cpio e roda as VMs
-all: clean x86 clean_build cpio run_vms
+# Diretório de logs
+LOG_DIR = $(BUSYBOX_INSTALL)/logs
+
+# Alvo padrão: compila x86, gera cpio, roda as VMs e analisa latência
+all: clean x86 clean_build cpio run_vms analyze_latency
 
 # Limpeza completa
 clean:
-	rm -rf build bin $(INITRAMFS) initramfs.cpio.gz
+	rm -rf build bin logs latency_reports $(INITRAMFS) initramfs.cpio.gz
 	@echo "[CLEAN] Tudo limpo."
 
 # Compilação para RISC-V
@@ -73,4 +77,9 @@ run_vms:
 	@echo "[RUN] Iniciando VMs em QEMU x86_64..."
 	@bash ./run_vms.sh $(KERNEL_IMAGE) $(INITRAMFS)
 
-.PHONY: all x86 riscv clean clean_build cpio run_vms
+# Análise de latência via Python
+analyze_latency:
+	@echo "[ANALYZE] Calculando latências a partir dos logs..."
+	@python3 tools/analyze_latency.py logs
+
+.PHONY: all x86 riscv clean clean_build cpio run_vms analyze_latency
