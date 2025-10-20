@@ -75,7 +75,7 @@ cpio:
 # Execução das VMs com QEMU x86_64
 run_vms:
 	@echo "[RUN] Iniciando VMs em QEMU x86_64..."
-	@bash ./run_vms.sh 10 $(KERNEL_IMAGE) $(INITRAMFS)
+	@bash ./run_vms.sh 80 $(KERNEL_IMAGE) $(INITRAMFS)
 
 # Análise de latência via Python
 analyze_latency:

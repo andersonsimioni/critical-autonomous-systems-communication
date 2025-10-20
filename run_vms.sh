@@ -51,11 +51,11 @@ cleanup() {
             continue
         fi
         if kill -0 "$pid" 2>/dev/null; then
-            echo "[INFO] Killing PID $pid"
+            
             kill "$pid" 2>/dev/null || true
             sleep 1
             if kill -0 "$pid" 2>/dev/null; then
-                echo "[INFO] Force killing PID $pid"
+                
                 kill -9 "$pid" 2>/dev/null || true
             fi
         fi
