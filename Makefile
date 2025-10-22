@@ -31,6 +31,7 @@ all: clean x86 clean_build cpio run_vms analyze_latency
 # Limpeza completa
 clean:
 	rm -rf build bin logs latency_reports $(INITRAMFS) initramfs.cpio.gz
+	rm -rf busybox/_install/main
 	@echo "[CLEAN] Tudo limpo."
 
 # Compilação para RISC-V
