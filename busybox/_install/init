@@ -1,0 +1,14 @@
+#!/bin/sh
+mkdir -p /proc /sys /dev
+
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+
+mkdir -p /dev/shm
+
+mount -t tmpfs tmpfs /dev/shm
+
+/sbin/ip link set dev eth0 up 
+#exec /bin/sh
+exec /main eth0 ping
