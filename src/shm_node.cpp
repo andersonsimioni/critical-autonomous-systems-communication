@@ -98,6 +98,44 @@ void* receive_msg_routine(void* args)
     printf("read msg thread running..\n");
 
     while (true)
+
+
+
+    {
+
+        //ENTREGA P2
+        //printf("waiting for messages..\n"); 
+
+        pthread_mutex_lock(&s->new_msg_cond_mtx);
+
+        while(!s->msg_available) pthread_cond_wait(&s->new_msg_cond, &s->new_msg_cond_mtx);
+
+        pthread_mutex_unlock(&s->new_msg_cond_mtx);
+
+        if(node->using_bus) continue;        
+
+        //printf("[%d] [%d] new message arrived!\n", s->parent_pid, node->pid);
+
+        char* msg = (char*)malloc(s->msg_len);
+
+        memcpy(msg, s->bus, s->msg_len);
+
+        //printf("Hex message is: ");
+
+        //for (size_t i = 0; i < s->msg_len; i++)
+
+            //printf("%02x ", ((unsigned char*)s->bus)[i]);
+
+        //printf("\n");
+
+        pthread_barrier_wait(&s->all_read_done_barrier);
+
+        node->on_receive_msg(s->msg_len, msg);
+
+
+    }
+    /* //ENTREGA P3
+    while (true)
     {
         // Receiver blocks here until writer posts sem_full
         sem_wait(&s->sem_full);
@@ -154,7 +192,7 @@ void* receive_msg_routine(void* args)
 
         free(msg);
     }
-
+*/
 }
 
 bool ShmNode::initialize_receive_msg_thread()
@@ -178,7 +216,60 @@ bool ShmNode::initialize_node()
 bool ShmNode::send_msg(int msg_len, const char* msg)
 {
 
-    SharedData* s = this->shared_data_ptr;
+    //ENTREGA P2
+    printf("sending message: %s\n", msg);
+
+    printf("locking bus..\n");
+
+    pthread_mutex_lock(&this->shared_data_ptr->bus_mtx);
+
+    this->using_bus = true;
+
+    //printf("writing message..\n");
+
+    memset(this->shared_data_ptr->bus, 0, PAYLOAD);
+
+    memcpy(this->shared_data_ptr->bus, msg, msg_len);
+
+    this->shared_data_ptr->msg_len = msg_len;
+
+    //printf("broadcasting new message signal..\n");
+
+
+    pthread_mutex_lock(&this->shared_data_ptr->new_msg_cond_mtx);
+
+
+    this->shared_data_ptr->msg_available = true;
+
+
+    pthread_cond_broadcast(&this->shared_data_ptr->new_msg_cond);
+
+    pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
+
+    //printf("waiting for all read done barrier..\n");
+
+    pthread_barrier_wait(&this->shared_data_ptr->all_read_done_barrier);
+
+    //printf("all nodes read the message\n");
+
+    //printf("setting msg_available = false\n");
+
+    pthread_mutex_lock(&this->shared_data_ptr->new_msg_cond_mtx);
+
+    this->shared_data_ptr->msg_available = false;
+
+    pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
+
+    this->using_bus = false;
+
+    printf("unlocking bus..\n");
+
+    pthread_mutex_unlock(&this->shared_data_ptr->bus_mtx);
+
+    return true;
+
+   /* //ENTREGA P3
+   SharedData* s = this->shared_data_ptr;
 
     // Wait for an empty slot (this blocks writer if buffer is full)
     sem_wait(&s->sem_empty);
@@ -222,7 +313,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
     pthread_mutex_unlock(&s->new_msg_cond_mtx);
 
     return true;
-    
+    */
 }
 
 ShmNode::ShmNode(const char* _shared_memory_region_name, bool _is_master_node, int _nodes_count, bool log) {

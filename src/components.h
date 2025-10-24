@@ -57,7 +57,7 @@ protected:
 
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
         auto s = Base::to_string(rx.payload);
-        //printf("[DEBUG] Brake component received a message!\n");
+        printf("[DEBUG] Brake component received a message! Will send to its gw\n");
         if (s == "brake!" || s == "hazard!") {
             std::string ack = "ack-brake";
             Base::send_local(ack);
@@ -67,7 +67,7 @@ protected:
     void on_tick() override {
         std::string payload = "brake!";
 
-        //printf("[DEBUG] Brake component tick\n");
+        printf("[DEBUG] Brake component tick\n");
         // Send to local gateway
         Base::send_local(payload);
         

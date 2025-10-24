@@ -17,7 +17,7 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     const bool is_shm = (dst == this->address());
     if (is_shm) {
         if (!this->shm_engine) { printf("SHM engine missing!\n"); return -1; }
-        //printf("NIC sending through SHM\n");
+        printf("NIC sending through SHM\n");
         return this->shm_engine->send(f);
     } else {
         if (!this->ethernet_engine) {
@@ -25,7 +25,7 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
             fprintf(stderr, "NIC::send(): no ethernet engine available for dst=%s; intended for gateway forwarding\n", dst.str().c_str());
             return -2;
         }
-        //printf("NIC sending through ETHERNET\n");
+        printf("NIC sending through ETHERNET\n");
         return this->ethernet_engine->send(f);
     }
 }
