@@ -83,9 +83,11 @@ public:
         uint64_t id = _next_msg_id.fetch_add(1);
         uint16_t my_port = _local.port;
         uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
+        uint16_t vm_to_id = to.mac.addr[5];
 
         // Log the send info
-        logf("[SEND VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, my_port, send_time, id);
+        //logf("[SEND VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, my_port, send_time, id);
+        logf("[SEND VM=%d PORT=%d T=%lu ID=%ld TO=%d]\n", vm_id, my_port, send_time, id, vm_to_id);
 
         // Prepend headers to payload so receiver can extract info
         std::string payload =
