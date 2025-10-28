@@ -30,7 +30,10 @@ public:
     using ProtocolNumber = NetProtocolType;
     using Address  = NetMacAddress;
     using Port     = uint16_t;
+    using SyncCallback = std::function<void(uint64_t master_time)>;
 
+    // Wildcard port for observers that want to receive all packets
+    static constexpr Port ANY_PORT = 0xFFFF;
     struct Endpoint {
         Address mac{};
         Port    port{0};
@@ -171,6 +174,7 @@ public:
         switch(type) {
             case ControlType::READY: msg = "READY"; break;
             case ControlType::GO:    msg = "GO";    break;
+            case ControlType::SYNC:  msg = "SYNC";    break;
             default: return -1; // Invalid
         }
         return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
@@ -225,16 +229,31 @@ public:
         delete f;
     }
 
-    // Enable sync with a callback
-    void enable_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
+    // Enable sync barrier with a callback
+    void enable_start_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
         _sync_total_vms = total_vms;
         _sync_local = local;
         _sync_ready_nodes.clear();
         _sync_done_callback = cb;
 
-        // Mark self as ready
-        _sync_ready_nodes.insert(_sync_local.mac.str());
-        printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n", _sync_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
+        if (!_is_master) {
+            // Only non-master nodes mark themselves ready
+            _sync_ready_nodes.insert(_sync_local.mac.str());
+            printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n",
+                _sync_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
+        }
+    }
+
+    // Periodic clock synchronization
+    bool _is_master{false};
+    void set_master(bool m) { _is_master = m; }
+
+    void broadcast_sync(uint64_t sim_time) {
+        if (!_is_master) return;
+        std::ostringstream oss;
+        oss << "SYNC " << sim_time;
+        std::string msg = oss.str();
+        send(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port), msg.data(), static_cast<unsigned>(msg.size()));
     }
 
     // Allow upper layers to subscribe by destination port
@@ -254,14 +273,26 @@ public:
         Message msg = parse_message(c.payload);
         //printf("[DEBUG] Protocol layer received message [%s] from %s\n", msg.body.c_str(), c.from.mac.str().c_str());
 
-        // Clean up nulls and whitespace
-        msg.body.erase(std::find(msg.body.begin(), msg.body.end(), '\0'), msg.body.end());
-        msg.body.erase(std::remove_if(msg.body.begin(), msg.body.end(), ::isspace), msg.body.end());
+        // Remove trailing nulls only (if any)
+        if (!msg.body.empty()) {
+            auto nullpos = msg.body.find('\0');
+            if (nullpos != std::string::npos) msg.body.resize(nullpos);
+        }
+
+        // Trim leading/trailing whitespace but preserve internal whitespace
+        auto ltrim = [](std::string &s) {
+            s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+        };
+        auto rtrim = [](std::string &s) {
+            s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), s.end());
+        };
+        ltrim(msg.body); rtrim(msg.body);
 
         // Determine control type
         ControlType ctrl = ControlType::NONE;
         if(msg.body == "READY") ctrl = ControlType::READY;
         else if(msg.body == "GO") ctrl = ControlType::GO;
+        else if (msg.body.rfind("SYNC", 0) == 0) ctrl = ControlType::SYNC;
 
         // Sync logic for READY
         if(ctrl == ControlType::READY && _sync_total_vms > 0) {
@@ -286,19 +317,52 @@ public:
             }
         }
 
+        // SYNC handling (runtime ticks)
+        if (ctrl == ControlType::SYNC) {
+            uint64_t master_time = parse_sync_time(msg.body);
+            // msg.body starts with "SYNC", possibly followed by whitespace and a number.
+            printf("[SYNC] SYNC received from %s (master_time=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)master_time);
+
+            if (master_time <= _last_sync_time) return;
+            _last_sync_time = master_time;
+
+            // Use the registered sync callback. Protocol itself doesn't step the simulation.
+            if (_sync_callback) {
+                _sync_callback(master_time);
+            } else {
+                // No handler registered => store the time and continue (no implicit stepping).
+                _local_sim_time = master_time;
+            }
+        }
+
         // Forward to port observers
         for(auto* po : portObservers_) {
             if(!po) continue;
             if(ctrl != ControlType::NONE) {
                 po->on_control(ctrl, c.from, c.to);
-            } else if(po->port() == c.to.port || po->port() <= -1) {
+            } else if(po->port() == c.to.port || po->port() == ANY_PORT) {
                 po->on_packet(c.from, c.to, c.payload.data(), c.length, c.origin);
             }
         }
     }
 
+    void handle_sync(uint64_t master_time) {
+        _local_sim_time = master_time;
+        if (_sync_callback) _sync_callback(master_time);
+    }
+
+    static uint64_t parse_sync_time(const std::string& s) {
+        size_t pos = s.find_first_of("0123456789");
+        return (pos != std::string::npos) ? std::stoull(s.substr(pos)) : 0ULL;
+    };
+
+    uint64_t local_sim_time() const { return _local_sim_time; }
+
 private:
     int _sync_total_vms{0};
+    uint64_t _last_sync_time{0};
+    std::atomic<uint64_t> _local_sim_time{0};
+    SyncCallback _sync_callback;
     Endpoint _sync_local{};
     std::set<std::string> _sync_ready_nodes;
     NIC* nic;

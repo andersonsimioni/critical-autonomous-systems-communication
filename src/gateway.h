@@ -24,30 +24,33 @@ class Gateway : public CarComponent<TNIC> {
     using Rx   = typename Base::CommunicatorT::Rx;
     using Port = typename Protocol<TNIC>::Port;
 public:
-    Gateway(uint16_t port): Base(port, "Gateway"), _port(port), _sync_done(false) {}
+    Gateway(uint16_t port, int vm_id, int total_sync_vms, bool is_sync_master = false)
+        : Base(port, "Gateway"), _port(port), _vm_id(vm_id), _total_sync_vms(total_sync_vms), _sync_master(is_sync_master), _sync_done(false) {}
 
-    virtual void initialize(bool is_master_node, int nodes_count) override
+    virtual void initialize(bool is_master_node, int total_nodes) override
     {
-        printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
+        printf("[CAR COMPONENT][%s] initializing.. (VM %d%s)\n",
+               this->name().c_str(), _vm_id, _sync_master ? " MASTER" : "");
 
         // Initialize communicators and protocol
-        this->initialize_communicator(is_master_node, nodes_count);
+        this->initialize_communicator(true, total_nodes);
 
-        // Enable protocol-level sync (sends READY and waits for GO broadcast) passing a lambda
-        _protocol->enable_sync(5, _local, [this]{
-            notify_sync_done();
-        });
+        // Enable protocol-level sync passing a lambda for GO arrival
+        if(_sync_master) {_protocol->set_master(true);}
+        _protocol->enable_start_sync(_total_sync_vms, _local, [this]{notify_sync_done();});
 
-        // Notify protocol that this node is ready
-        _protocol->send_control(_local, typename Protocol<TNIC>::Endpoint(Ethernet::Address::BROADCAST(), _local.port), Protocol<TNIC>::ControlType::READY);
-        printf("[SYNC] READY sent from VM %s:%u\n", _local.mac.str().c_str(), _local.port);
+        // Only non-master nodes send READY; master just waits for READYs
+        if(!_sync_master) {
+            _protocol->send_control(_local, Endpoint(Ethernet::Address::BROADCAST(), _local.port), Protocol<TNIC>::ControlType::READY);
+            printf("[SYNC][VM %d] READY sent\n", _vm_id);
+        }
 
-        // Wait for GO from protocol
+        // Wait for GO broadcast from master
         {
             std::unique_lock<std::mutex> lk(_sync_mtx);
             _sync_cv.wait(lk, [&]{ return _sync_done.load(); });
         }
-        printf("[SYNC] Received GO. All VMs synced. Starting ticks.\n");
+        printf("[SYNC][VM %d] GO received. All VMs synced. Starting ticks.\n", _vm_id);
         printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
     }
 
@@ -76,6 +79,13 @@ protected:
     }
 
     void on_tick() override {
+
+        if(_sync_master) {
+            // Only the sync master broadcasts SYNC ticks
+            uint64_t sim_time = _protocol->local_sim_time();
+            _protocol->broadcast_sync(sim_time + 1);
+        }
+
         // Example periodic broadcast
         std::string msg = "PING";
         //_comm->send(_to_bcast, msg);
@@ -86,6 +96,9 @@ protected:
 
 private:
     uint16_t _port;
+    int _vm_id;                      // VM identity
+    int _total_sync_vms;             // number of VMs to wait for at the barrier
+    bool _sync_master;               // true if this Gateway coordinates READY/GO and SYNC
     std::atomic<bool> _sync_done;
     std::mutex _sync_mtx;
     std::condition_variable _sync_cv;

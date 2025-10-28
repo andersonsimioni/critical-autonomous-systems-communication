@@ -116,13 +116,13 @@ int EngineEthernet::send(const Ethernet::Frame& frame)
 
     ssize_t sent = ::sendto(sock_, buf.data(), buf.size(), 0, reinterpret_cast<struct sockaddr*>(&sll), sizeof(sll));
 
-/*     if (sent < 0) {
+    if (sent < 0) {
         int e = errno;
         printf("[ETH SEND] sendto() failed: %s (%d)\n", strerror(e), e);
     } else {
         printf("[ETH SEND] sendto() sent %zd bytes (payload %u type 0x%04x) dst=%s\n",
             sent, frame.size, frame.proto, frame.dst.str().c_str());
-    } */
+    }
 
     return (sent < 0) ? -1 : static_cast<int>(sent > (ssize_t)sizeof(hdr) ? sent - sizeof(hdr) : 0);
 }

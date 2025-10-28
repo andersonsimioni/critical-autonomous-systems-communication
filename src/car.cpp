@@ -14,23 +14,30 @@ Car::~Car()
     // TODO: optionally delete components
 }
 
-void Car::start()
+void Car::start(int vm_id, int total_sync_vms)
 {
     int components_len = this->components.size();
 
-    // Create and initialize the gateway first
-    Gateway<NIC>* gateway = new Gateway<NIC>(GATEWAY_PORT);
+    // Determine VM identity
+    bool is_sync_master = (vm_id == 0); // VM 0 is the road-side equipment (gateway only)
+
+    // Create the gateway for all VMs
+    Gateway<NIC>* gateway = new Gateway<NIC>(GATEWAY_PORT, vm_id, total_sync_vms, is_sync_master);
     gateway->initialize(true, components_len);
 
-    // Fork child processes for each component
-    for (int i = 0; i < components_len; i++)
+    // Only non-zero VMs (cars) fork child processes for other components
+    if(vm_id != 0)
     {
-        int pid = fork();
-        if(pid == 0)
+        for (int i = 0; i < components_len; i++)
         {
-            CarComponent<NIC>* comp = this->components.at(i);
-            comp->initialize(false, components_len);
-            return; // child process exits start() after initialization
+            int pid = fork();
+            if(pid == 0)
+            {
+                // Child process: initialize component
+                CarComponent<NIC>* comp = this->components.at(i);
+                comp->initialize(false, components_len);
+                return; // exit child after init
+            }
         }
     }
 

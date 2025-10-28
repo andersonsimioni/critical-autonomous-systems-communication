@@ -1,14 +1,38 @@
 #!/bin/sh
-mkdir -p /proc /sys /dev
 
+echo "[DEBUG INIT] Creating /proc..."
+mkdir -p /proc
 mount -t proc proc /proc
-mount -t sysfs sys /sys
-mount -t devtmpfs dev /dev
 
+echo "[DEBUG INIT] Creating /dev and /dev/shm..."
+mkdir -p /dev
 mkdir -p /dev/shm
 
+echo "[DEBUG INIT] Mounting /dev as tmpfs (but keep /dev/shm intact)..."
+mount -t tmpfs tmpfs /dev
+
+# recreate /dev/shm after /dev mount
+mkdir -p /dev/shm
 mount -t tmpfs tmpfs /dev/shm
 
-/sbin/ip link set dev eth0 up 
-#exec /bin/sh
-exec /main eth0 ping
+echo "[DEBUG INIT] Extracting VM_ID and TOTAL from /proc/cmdline..."
+VM_ID=""
+TOTAL=""
+for arg in $(cat /proc/cmdline); do
+    case $arg in
+        vm_id=*) VM_ID="${arg#vm_id=}" ;;
+        total_sync_vms=*) TOTAL="${arg#total_sync_vms=}" ;;
+    esac
+done
+echo "[DEBUG INIT] VM_ID=$VM_ID TOTAL=$TOTAL"
+
+if [ -z "$VM_ID" ] || [ -z "$TOTAL" ]; then
+    echo "Error: vm_id or total_sync_vms not provided!"
+    exit 1
+fi
+
+ip link set eth0 up || ip link set ens3 up || ip link set enp0s3 up
+echo "[INIT] Network interfaces up."
+
+echo "[DEBUG INIT] Starting main..."
+exec /main vm_id="$VM_ID" total_sync_vms="$TOTAL"

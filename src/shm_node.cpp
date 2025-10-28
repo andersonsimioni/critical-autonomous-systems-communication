@@ -324,6 +324,9 @@ ShmNode::ShmNode(const char* _shared_memory_region_name, bool _is_master_node, i
     this->shared_data_ptr = nullptr;
     this->log = log;
     this->pid = getpid();
+
+    printf("[DEBUG INIT] ShmNode created in PID %d: is_master_node=%d, nodes_count=%d, shared_memory_region='%s'\n",
+           this->pid, this->is_master_node, this->nodes_count, this->shared_memory_region_name);
 }
 
 ShmNode::~ShmNode() {}
