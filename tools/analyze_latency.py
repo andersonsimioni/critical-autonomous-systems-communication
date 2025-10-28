@@ -13,14 +13,14 @@ os.makedirs(OUT_DIR, exist_ok=True)
 print(f"[INFO] Scanning logs in {LOG_DIR}")
 
 # --- Regex para parsing de logs SEND e RECV ---
-send_re = re.compile(r'\[SEND\s+VM=(\d+)\s+PORT=(\d+)\s+T=(\d+)\s+ID=(\d+)\s+TO=(\d+)\]')
-recv_re = re.compile(r'\[RECV\s+VM=(\d+)\s+PORT=(\d+)\s+T=(\d+)\s+ID=(\d+)\]')
+send_re = re.compile(r'\[SEND\s+VM=(\d+)\s+PORT=(\d+)\s+TIME=(\d+)\s+TYPE=(\d+)\s+ID=(\d+)\]')
+recv_re = re.compile(r'\[RECV\s+VM=(\d+)\s+PORT=(\d+)\s+TIME=(\d+)\s+TYPE=(\d+)\s+ID=(\d+)\]')
 
 # --- Estruturas de dados ---
-# Key para SEND: (from_vm, to_vm, id)
-send_data = {}
-# Lista de RECVs: (recv_vm, port, t, id)
-recv_data = []
+# Lista de SENDs: (vm, port, type, id, time)
+send_list = []
+# Lista de RECVs: (vm, port, type, id, time)
+recv_list = []
 
 # --- Leitura dos logs ---
 for vm_dir in os.listdir(LOG_DIR):
@@ -36,45 +36,53 @@ for vm_dir in os.listdir(LOG_DIR):
                 # Verifica SEND
                 m_send = send_re.search(line)
                 if m_send:
-                    vm, port, t, mid, to_vm = m_send.groups()
-                    send_data[(int(vm), int(to_vm), int(mid))] = (int(t), int(port))
+                    vm, port, t, typ, mid = m_send.groups()
+                    send_list.append((int(vm), int(port), int(typ), int(mid), int(t)))
                     continue
 
                 # Verifica RECV
                 m_recv = recv_re.search(line)
                 if m_recv:
-                    vm, port, t, mid = m_recv.groups()
-                    recv_data.append((int(vm), int(port), int(t), int(mid)))
+                    vm, port, t, typ, mid = m_recv.groups()
+                    recv_list.append((int(vm), int(port), int(typ), int(mid), int(t)))
+
+# --- Ordenar SENDs por tempo para cada key ---
+send_dict = defaultdict(list)  # key=(vm,port,type,id) -> list of times
+for vm, port, typ, mid, t in send_list:
+    send_dict[(vm, port, typ, mid)].append(t)
+
+for key in send_dict:
+    send_dict[key].sort()  # ascending time
 
 # --- Cálculo das latências ---
 latency_data = defaultdict(lambda: defaultdict(list))  # recv_vm -> recv_port -> list(latency)
 detailed_data = defaultdict(list)  # recv_vm -> rows detalhados
 
-for recv_vm, recv_port, recv_t, mid in recv_data:
-    # Encontrar o SEND correspondente (de qualquer origem) com mesmo ID e destino = recv_vm
-    candidates = [(from_vm, send_t, send_port)
-                  for (from_vm, to_vm, msg_id), (send_t, send_port) in send_data.items()
-                  if msg_id == mid and to_vm == recv_vm]
+for recv_vm, recv_port, recv_type, mid, recv_t in recv_list:
+    key = (recv_vm, recv_port, recv_type, mid)
+    send_times = send_dict.get(key)
+    if not send_times:
+        continue
 
-    if not candidates:
-        continue  # sem envio correspondente
+    # Pega o SEND mais recente antes do RECV
+    send_t_candidates = [t for t in send_times if t <= recv_t]
+    if not send_t_candidates:
+        continue
 
-    # Se houver múltiplos envios com mesmo ID, pega o mais recente antes do recv_t
-    from_vm, send_t, send_port = max(candidates, key=lambda x: x[1])
+    send_t = max(send_t_candidates)
     latency_us = recv_t - send_t
-
     latency_data[recv_vm][recv_port].append(latency_us)
     detailed_data[recv_vm].append([
-        from_vm, recv_port, mid, send_t, recv_t, latency_us, latency_us / 1000
+        recv_vm, recv_port, recv_type, mid, send_t, recv_t, latency_us, latency_us / 1000
     ])
 
 # --- CSV detalhado por VM receptora ---
 for recv_vm, rows in detailed_data.items():
-    rows.sort(key=lambda x: x[2])  # ordena por ID
+    rows.sort(key=lambda x: (x[2], x[3]))  # ordena por TYPE e ID
     csv_file = os.path.join(OUT_DIR, f"vm_{recv_vm}_latency.csv")
     with open(csv_file, "w", newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['from_vm', 'recv_port', 'id', 'send_t', 'recv_t', 'latency_us', 'latency_ms'])
+        writer.writerow(['recv_vm', 'recv_port', 'type', 'id', 'send_time', 'recv_time', 'latency_us', 'latency_ms'])
         writer.writerows(rows)
     print(f"[INFO] Detailed CSV for VM {recv_vm} saved to {csv_file}")
 

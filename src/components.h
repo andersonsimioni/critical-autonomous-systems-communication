@@ -12,6 +12,9 @@
 template <typename TNIC>
 class PowertrainComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
+    using Base::_comm;
+    using Base::_protocol;
+    using Base::_local;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
     PowertrainComponent(uint16_t port) : Base(port, "Powertrain") {}
@@ -30,9 +33,7 @@ protected:
     }
 
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
-        // Example: accept commands addressed to this port (from gateway or others)
-        auto s = Base::to_string(rx.payload);
-        //std::cout<<"Received data: "<<s<<"\n";
+
     }
 
 private:
@@ -45,6 +46,9 @@ private:
 template <typename TNIC>
 class BrakeComponent : public CarComponent<TNIC> {
     using Base = CarComponent<TNIC>;
+    using Base::_comm;
+    using Base::_protocol;
+    using Base::_local;
     using Rx = typename Base::CommunicatorT::Rx;
 public:
     BrakeComponent(uint16_t port)
@@ -56,9 +60,9 @@ protected:
     unsigned tick_period_ms() override { return 2000; } // every 2s
 
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
-        auto s = Base::to_string(rx.payload);
-        printf("[DEBUG] Brake component received a message! Will send to its gw\n");
-        if (s == "brake!" || s == "hazard!") {
+
+        //printf("[BRAKE] Brake component received message [%s]\n", rx.msg.body.c_str());
+        if (rx.msg.body == "brake!" || rx.msg.body == "hazard!") {
             std::string ack = "ack-brake";
             Base::send_local(ack);
         }
@@ -67,10 +71,7 @@ protected:
     void on_tick() override {
         std::string payload = "brake!";
 
-        printf("[DEBUG] Brake component tick\n");
         // Send to local gateway
         Base::send_local(payload);
-        
-
     }
 };

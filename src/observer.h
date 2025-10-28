@@ -39,15 +39,26 @@ private:
 template <typename D, typename C = void>
 class ConcurrentObserver {
 public:
-    void update(C, D* d) {
-        { std::lock_guard<std::mutex> lock(mtx); data.push_back(*d); }
+    void update(C c, D* d, ChannelOrigin origin) {
+        std::lock_guard<std::mutex> lock(mtx);
+        data.push_back({c, *d, origin});
         cv.notify_one();
     }
-    D updated() {
+
+    struct Entry {
+        C channel;
+        D value;
+        ChannelOrigin origin;
+    };
+
+    Entry updated() {
         std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock,[&]{return !data.empty();});
-        D d=data.front(); data.pop_front(); return d;
+        cv.wait(lock, [&]{ return !data.empty(); });
+        Entry e = data.front(); 
+        data.pop_front(); 
+        return e;
     }
+
 private:
     std::list<D> data;
     std::mutex mtx;
@@ -62,7 +73,10 @@ class ConcurrentObserved {
 public:
     void attach(ConcurrentObserver<D,C>* o){ observers.push_back(o); }
     void detach(ConcurrentObserver<D,C>* o){ observers.remove(o); }
-    void notify(C c, D* d){ for(auto* o:observers) o->update(c,d); }
+    void notify(C c, D* d, ChannelOrigin origin){
+        for(auto* o: observers) 
+            o->update(c, d, origin);
+    }
 private:
     std::list<ConcurrentObserver<D,C>*> observers;
 };

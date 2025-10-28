@@ -89,19 +89,17 @@ public:
 
         Protocol<NIC>::Endpoint me         { this->_my_mac, _port };
         Protocol<NIC>::Endpoint my_gateway { this->_my_mac, GATEWAY_PORT };
-        Protocol<NIC>::Endpoint my_brake   { this->_my_mac, BRAKE_PORT };
         Protocol<NIC>::Endpoint toBcast    { Ethernet::Address::BROADCAST(), GATEWAY_PORT };
 
         this->_local    = me;
         this->_to_gate  = my_gateway;
-        this->_to_brake = my_brake;
         this->_to_bcast = toBcast;
         
         // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
         this->_comm = new Communicator<NIC>(_protocol, me);
-                
+        _comm->set_parent(this);
+        _comm->attach(this);
         this->_comm->set_up_port_observer(is_master_node ? -1 : this->port());
-
 
         if (is_master_node) _ethernet_engine->start();
         _shm_engine->start();
@@ -112,10 +110,23 @@ public:
         printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
         initialize_communicator(is_master_node, nodes_count);
         printf("[CAR COMPONENT][%s] initialized!\n", this->name().c_str());
-        
+      
         pthread_create(&_pubsub_thread, nullptr, pubsub_thread_entry, this);
 
         this->on_tick_loop();
+    }
+
+    void set_peer_ports(const std::vector<uint16_t>& ports) {
+        _peer_ports.clear();
+        for (auto port : ports) {
+            if (port != _port) _peer_ports.push_back(port); // skip self
+        }
+
+        // Debug print
+        printf("[DEBUG][%s] Peer ports:\n", _name.c_str());
+        for (auto p : _peer_ports) {
+            printf("  PORT %d\n", p);
+        }
     }
 
     // Send SIGTERM and reap the child
@@ -143,24 +154,49 @@ public:
                 auto due = _pubSub.get_due_subscribers(type, false);
                 for (auto& who : due) {
                     printf("[SEND] to %s -> %d = ", who.c_str(), (int)type);
-                    send_fanout("TO=" + who + " DATA=" + vehicle_data_to_string(data));
+                    send_local("TO=" + who + " DATA=" + vehicle_data_to_string(data));
                 }
             }
         }
     }
 
-    // Convenience send helpers
-    int send_broadcast(const void* p, size_t n){ return _comm->send(_to_bcast, p, n); }
-    int send_broadcast(const std::string& s)   { return send_broadcast(s.data(), s.size()); }
-    
-    int send_local(const void* p, size_t n)    { return _comm->send(_to_gate, p, n); }
-    int send_local(const std::string& s)       { return send_local(s.data(), s.size()); }
+    // ---------------- Convenience Send Helpers ----------------
 
-    int send_fanout(const void* p, size_t n)    {
-        //printf("[DEBUG] Fanning out message [%.*s]\n", (int)n, (const char*)p);
-        return _comm->send(_to_brake, p, n);
+    // Send a string with format "TO=<port> DATA=<payload>"
+    int send_local(const std::string& s) {
+        size_t pos_to   = s.find("TO=");
+        size_t pos_data = s.find("DATA=");
+
+        if (pos_to == std::string::npos || pos_data == std::string::npos) {
+            // Fallback: send entire string to gateway
+            return _comm->send(_to_gate, static_cast<int>(_port), s.data(), s.size());
+        }
+
+        // Extract the port number
+        std::string port_str = s.substr(pos_to + 3, pos_data - pos_to - 4); // 4 = " DATA"
+        uint16_t port = static_cast<uint16_t>(std::stoi(port_str));
+
+        // Extract the data
+        std::string payload = s.substr(pos_data + 5); // 5 = strlen("DATA=")
+
+        // Send to the parsed endpoint
+        Protocol<NIC>::Endpoint dst { _my_mac, port };
+        return _comm->send(dst, static_cast<int>(_port), payload.data(), payload.size());
     }
-    int send_fanout(const std::string& s)       { return send_fanout(s.data(), s.size()); }
+
+    void forward_message(const Rx& rx) {
+        auto fwd_msg = rx.msg;
+        fwd_msg.orig_vm   = _local.mac.addr[5];
+        fwd_msg.orig_port = _port;
+        _comm->send_message(_to_bcast, fwd_msg);
+    }
+
+    void fanout_message(const Rx& rx) {
+        for (auto port : _peer_ports) {
+            Protocol<NIC>::Endpoint dst { _my_mac, port };
+            _comm->send_message(dst, rx.msg);
+        }
+    }
 
     uint16_t port() const { return _port; }
     const std::string& name() const { return _name; }
@@ -176,7 +212,9 @@ protected:
     Protocol<NIC>* _protocol;
     Communicator<NIC>* _comm;
 
-    Endpoint _local{}, _to_gate{}, _to_brake{}, _to_bcast{};
+    Endpoint _local{}, _to_gate{}, _to_bcast{};
+    std::vector<uint16_t> _peer_ports;
+
     std::string _name;
     uint16_t _port{0};
 
@@ -185,7 +223,7 @@ protected:
     std::unordered_map<VehicleDataType, VehicleData> _data;
 
     bool digest_subs(const Rx& rx) {
-        std::string s(rx.payload.begin(), rx.payload.end());
+        std::string s = rx.msg.body;
         size_t p1 = s.find("SUBS=");
         size_t p2 = s.find("SUBS_TYPE=");
         size_t p3 = s.find("SUBS_PERIOD=");

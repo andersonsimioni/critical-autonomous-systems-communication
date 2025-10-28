@@ -217,9 +217,9 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
 {
 
     //ENTREGA P2
-    printf("sending message: %s\n", msg);
+    //printf("sending message: %s\n", msg);
 
-    printf("locking bus..\n");
+    //printf("locking bus..\n");
 
     pthread_mutex_lock(&this->shared_data_ptr->bus_mtx);
 
@@ -262,7 +262,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
 
     this->using_bus = false;
 
-    printf("unlocking bus..\n");
+    //printf("unlocking bus..\n");
 
     pthread_mutex_unlock(&this->shared_data_ptr->bus_mtx);
 
