@@ -55,7 +55,7 @@ bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame&
     }
 
     size_t header_size = sizeof(out.dst) + sizeof(out.src) +
-                         sizeof(out.proto) + sizeof(out.size);
+                         sizeof(out.proto) +4 ;//+ sizeof(out.size);
 
     if (len < header_size) {
         printf("[deserialize_frame] ERROR: len=%zu too small, expected >= %zu\n", len, header_size);
