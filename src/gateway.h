@@ -36,6 +36,7 @@ public:
         this->initialize_communicator(true, total_nodes);
 
         // Enable protocol-level sync passing a lambda for GO arrival
+        _comm->set_on_sync_done([this]() {this->notify_sync_done();});
         if(_sync_master) {_protocol->set_master(true);}
         _protocol->enable_start_sync(_total_sync_vms, _local, [this]{notify_sync_done();});
 

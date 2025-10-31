@@ -8,6 +8,7 @@
 #include <set>
 #include <sstream>
 #include <functional>
+#include <unordered_map>
 
 #include "observer.h"
 #include "frame.h"
@@ -68,11 +69,16 @@ public:
         NONE,   // Not a control message
         READY,
         GO,
-        SYNC
+        SYNC,
+        JOIN_GROUP,
+        MOVE_GROUP,
+        LEAVE_GROUP,
+        GROUP_INFO,
     };
 
     struct Message {
-        uint8_t  orig_vm;      // Original sender VM (from first sender)
+        uint8_t  group_id;     // Road segment of the original sender VM (from first sender)
+        uint8_t  orig_vm;      // Original sender VM
         uint16_t orig_port;    // Original sender port
         uint64_t timestamp;    // Original TIME
         int      type;         // Message type (like component port)
@@ -83,7 +89,8 @@ public:
 
     static std::string build_message(const Message& msg) {
         std::ostringstream oss;
-        oss << "VM=" << int(msg.orig_vm) << " "
+        oss << "GROUP=" << int(msg.group_id) << " "
+            << "VM=" << int(msg.orig_vm) << " "
             << "PORT=" << msg.orig_port << " "
             << "TIME=" << msg.timestamp << " "
             << "TYPE=" << msg.type << " "
@@ -136,6 +143,7 @@ public:
             return s.substr(p, end - p);
         };
 
+        if (auto v = extract_field("GROUP"); !v.empty()) msg.group_id = static_cast<uint8_t>(std::stoi(v));
         if (auto v = extract_field("VM"); !v.empty()) msg.orig_vm = static_cast<uint8_t>(std::stoi(v));
         if (auto v = extract_field("PORT"); !v.empty()) msg.orig_port = static_cast<uint16_t>(std::stoi(v));
         if (auto v = extract_field("TIME"); !v.empty()) msg.timestamp = std::stoull(v);
@@ -178,6 +186,67 @@ public:
             default: return -1; // Invalid
         }
         return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
+    }
+
+    int send_group_control(const Endpoint& from, const Endpoint& to,
+                        ControlType type, int group_id) {
+        std::ostringstream oss;
+        switch (type) {
+            case ControlType::JOIN_GROUP:  oss << "JOIN_GROUP "  << group_id; break;
+            case ControlType::MOVE_GROUP:  oss << "MOVE_GROUP "  << group_id; break;
+            case ControlType::LEAVE_GROUP: oss << "LEAVE_GROUP"; break;
+            case ControlType::GROUP_INFO:  oss << "GROUP_INFO "  << group_id; break;
+            default: return -1;
+        }
+        std::string msg = oss.str();
+        return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
+    }
+
+    int get_current_group_id() const { return current_group_id; }
+
+    std::set<std::string> group_members(int gid) const {
+        if (auto it = _groups.find(gid); it != _groups.end())
+            return it->second.members;
+        return {};
+    }
+
+    void broadcast_group_info(int gid) {
+        std::ostringstream oss;
+        oss << "GROUP_INFO " << gid << " MEMBERS:";
+        for (auto &m : _groups[gid].members) oss << " " << m;
+        std::string msg = oss.str();
+        send(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), msg.data(), msg.size());
+    }
+
+    void join_group(int gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::JOIN_GROUP, gid);}
+    void leave_group(int gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::LEAVE_GROUP, gid);}
+    void move_group(int new_gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::MOVE_GROUP, new_gid);}
+
+    // Enable sync barrier with a callback
+    void enable_start_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
+        _sync_total_vms = total_vms;
+        _control_local = local;
+        _sync_ready_nodes.clear();
+        _sync_done_callback = cb;
+
+        if (!_is_master) {
+            // Only non-master nodes mark themselves ready
+            _sync_ready_nodes.insert(_control_local.mac.str());
+            printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n",
+                _control_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
+        }
+    }
+
+    // Periodic clock synchronization
+    bool _is_master{false};
+    void set_master(bool m) { _is_master = m; }
+
+    void broadcast_sync(uint64_t sim_time) {
+        if (!_is_master) return;
+        std::ostringstream oss;
+        oss << "SYNC " << sim_time;
+        std::string msg = oss.str();
+        send(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), msg.data(), static_cast<unsigned>(msg.size()));
     }
 
     // Optional sync receive helper (not used in pure async mode)
@@ -229,33 +298,6 @@ public:
         delete f;
     }
 
-    // Enable sync barrier with a callback
-    void enable_start_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
-        _sync_total_vms = total_vms;
-        _sync_local = local;
-        _sync_ready_nodes.clear();
-        _sync_done_callback = cb;
-
-        if (!_is_master) {
-            // Only non-master nodes mark themselves ready
-            _sync_ready_nodes.insert(_sync_local.mac.str());
-            printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n",
-                _sync_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
-        }
-    }
-
-    // Periodic clock synchronization
-    bool _is_master{false};
-    void set_master(bool m) { _is_master = m; }
-
-    void broadcast_sync(uint64_t sim_time) {
-        if (!_is_master) return;
-        std::ostringstream oss;
-        oss << "SYNC " << sim_time;
-        std::string msg = oss.str();
-        send(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port), msg.data(), static_cast<unsigned>(msg.size()));
-    }
-
     // Allow upper layers to subscribe by destination port
     void attach(PortObserver* po) { portObservers_.push_back(po); }
     void detach(PortObserver* po) { portObservers_.remove(po);   }
@@ -293,6 +335,10 @@ public:
         if(msg.body == "READY") ctrl = ControlType::READY;
         else if(msg.body == "GO") ctrl = ControlType::GO;
         else if (msg.body.rfind("SYNC", 0) == 0) ctrl = ControlType::SYNC;
+        else if (msg.body.rfind("JOIN_GROUP", 0) == 0) ctrl = ControlType::JOIN_GROUP;
+        else if (msg.body.rfind("MOVE_GROUP", 0) == 0) ctrl = ControlType::MOVE_GROUP;
+        else if (msg.body.rfind("LEAVE_GROUP", 0) == 0) ctrl = ControlType::LEAVE_GROUP;
+        else if (msg.body.rfind("GROUP_INFO", 0) == 0) ctrl = ControlType::GROUP_INFO;
 
         // Sync logic for READY
         if(ctrl == ControlType::READY && _sync_total_vms > 0) {
@@ -303,13 +349,13 @@ public:
             // If all nodes are ready, send GO (only if not already sent)
             if(!_sync_go_sent && (int)_sync_ready_nodes.size() == _sync_total_vms) {
                 printf("[SYNC] All nodes ready, sending GO broadcast\n");
-                send_control(_sync_local, Endpoint(Ethernet::Address::BROADCAST(), _sync_local.port), ControlType::GO);
+                send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::GO);
                 _sync_go_sent = true;   // mark that we already sent GO
             }
         }
 
         // If GO received, notify owner
-        if(ctrl == ControlType::GO) {
+        else if(ctrl == ControlType::GO) {
             if(!_sync_go_received) {
                 printf("[SYNC] GO received from %s\n", c.from.mac.str().c_str());
                 _sync_go_received = true;   // prevent reacting multiple times
@@ -318,7 +364,7 @@ public:
         }
 
         // SYNC handling (runtime ticks)
-        if (ctrl == ControlType::SYNC) {
+        else if (ctrl == ControlType::SYNC) {
             uint64_t master_time = parse_sync_time(msg.body);
             // msg.body starts with "SYNC", possibly followed by whitespace and a number.
             printf("[SYNC] SYNC received from %s (master_time=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)master_time);
@@ -333,6 +379,34 @@ public:
                 // No handler registered => store the time and continue (no implicit stepping).
                 _local_sim_time = master_time;
             }
+        }
+
+        else if (ctrl == ControlType::JOIN_GROUP) {
+            int gid = std::stoi(msg.body.substr(strlen("JOIN_GROUP")));
+            _groups[gid].members.insert(c.from.mac.str());
+            printf("[GROUP] VM %s joined group %d\n", c.from.mac.str().c_str(), gid);
+            if (c.from.mac.str() == _groups[gid].master_mac)
+                printf("[GROUP] VM %s is master of group %d\n", c.from.mac.str().c_str(), gid);
+        }
+
+        else if (ctrl == ControlType::MOVE_GROUP) {
+            int new_gid = std::stoi(msg.body.substr(strlen("MOVE_GROUP")));
+            // remove from old group
+            for (auto &[gid, info] : _groups)
+                info.members.erase(c.from.mac.str());
+            _groups[new_gid].members.insert(c.from.mac.str());
+            printf("[GROUP] VM %s moved to group %d\n", c.from.mac.str().c_str(), new_gid);
+        }
+
+        else if (ctrl == ControlType::LEAVE_GROUP) {
+            for (auto &[gid, info] : _groups)
+                if (info.members.erase(c.from.mac.str()))
+                    printf("[GROUP] VM %s left group %d\n", c.from.mac.str().c_str(), gid);
+        }
+
+        else if (ctrl == ControlType::GROUP_INFO) {
+            printf("[GROUP] Info received from %s: %s\n",
+                c.from.mac.str().c_str(), msg.body.c_str());
         }
 
         // Forward to port observers
@@ -359,18 +433,31 @@ public:
     uint64_t local_sim_time() const { return _local_sim_time; }
 
 private:
+
+    // Group management
+    struct GroupInfo {
+        int group_id;
+        std::set<std::string> members;  // store MAC addresses (or VM names)
+        std::string master_mac;         // optional
+    };
+
+    int current_group_id{0};
+    std::unordered_map<int, GroupInfo> _groups;
+
+    // Sync management
     int _sync_total_vms{0};
     uint64_t _last_sync_time{0};
     std::atomic<uint64_t> _local_sim_time{0};
     SyncCallback _sync_callback;
-    Endpoint _sync_local{};
+    Endpoint _control_local{};
     std::set<std::string> _sync_ready_nodes;
-    NIC* nic;
-    ProtocolNumber etherType_;
-    std::list<PortObserver*> portObservers_;
     std::function<void()> _sync_done_callback;
     bool _sync_go_sent = false;
     bool _sync_go_received = false;
+
+    NIC* nic;
+    ProtocolNumber etherType_;
+    std::list<PortObserver*> portObservers_;
 };
 
 #endif // PROTOCOL_H

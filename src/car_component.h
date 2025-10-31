@@ -97,7 +97,6 @@ public:
         
         // Communicator, route dst = local mac to shm and dst = broadcast to ethernet
         this->_comm = new Communicator<NIC>(_protocol, me);
-        _comm->set_parent(this);
         _comm->attach(this);
         this->_comm->set_up_port_observer(is_master_node ? -1 : this->port());
 

@@ -65,10 +65,6 @@ public:
     if (_log.is_open()) _log.close();
 }
 
-    // Optional: set the parent object (e.g., Gateway) to notify on sync events
-    template <typename TParent>
-    void set_parent(TParent* parent) { _parent = parent; }
-
     void set_up_port_observer(uint16_t port)
     {
         _eth_obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
@@ -83,9 +79,11 @@ public:
         uint64_t send_time = get_microseconds_now();
         uint64_t id = _next_msg_id.fetch_add(1);
         uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
+        uint8_t group_id = _protocol->get_current_group_id();
 
         // Construct Protocol::Message
         typename ProtocolT::Message msg;
+        msg.group_id = group_id;
         msg.orig_vm = vm_id;
         msg.orig_port = _local.port;
         msg.timestamp = send_time;
@@ -97,7 +95,7 @@ public:
         std::string payload = _protocol->build_message(msg);
 
         // Log send
-        logf("[SEND VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", vm_id, _local.port, send_time, type, id);
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
@@ -110,7 +108,7 @@ public:
     int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
         std::string payload = _protocol->build_message(msg);
         
-        logf("[SEND VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
@@ -139,10 +137,7 @@ private:
         PortObserverImpl(Communicator* owner, ChannelOrigin origin, uint16_t port) : ProtocolT::PortObserver(origin), _owner(owner), _port(port) {}
         uint16_t port() const override { return _port; }
 
-        void on_packet(const Endpoint& from, const Endpoint& to,
-                    const uint8_t* data, unsigned len,
-                    ChannelOrigin origin_of_packet) override
-        {
+        void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len, ChannelOrigin origin_of_packet) override {
             if (this->origin != origin_of_packet) return;
 
             uint64_t recv_time = get_microseconds_now();
@@ -154,17 +149,17 @@ private:
             typename Protocol<TNIC>::Message msg = _owner->_protocol->parse_message(raw);
 
             // Clean up nulls and whitespace in body
-            msg.body.erase(std::find(msg.body.begin(), msg.body.end(), '\0'), msg.body.end());
-            msg.body.erase(std::remove_if(msg.body.begin(), msg.body.end(), ::isspace), msg.body.end());
+            msg.body.erase(msg.body.begin(), std::find_if(msg.body.begin(), msg.body.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+            msg.body.erase(std::find_if(msg.body.rbegin(), msg.body.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), msg.body.end());
 
             // Extract metadata for logging
+            int group_id = msg.group_id;
             int vm_id = msg.orig_vm;
             int src_port = msg.orig_port;
             int type = msg.type;
             uint64_t id = msg.msg_id;
 
-            _owner->logf("[RECV VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n",
-                        vm_id, src_port, recv_time, type, id);
+            _owner->logf("[RECV GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, src_port, recv_time, type, id);
 
             // Deliver to Rx
             Communicator::Rx rx;
@@ -179,19 +174,13 @@ private:
             _owner->notify(rx_copy, _port, origin_of_packet); // observers get a copy
         }
 
-        void on_control(typename Protocol<TNIC>::ControlType type,
-                        const Endpoint& from,
-                        const Endpoint& to) override
-        {
+        void on_control(typename Protocol<TNIC>::ControlType type, const Endpoint& from, const Endpoint& to) override {
             switch(type) {
                 case Protocol<TNIC>::ControlType::READY:
                     break;
                 case Protocol<TNIC>::ControlType::GO:
-                    if(_owner->_parent) {
-                        static_cast<Gateway<TNIC>*>(_owner->_parent)->notify_sync_done();
-                    }
+                    if (_owner->_on_sync_done) {_owner->_on_sync_done();}
                     break;
-
                 default:
                     // ignore other control messages
                     break;
@@ -217,16 +206,6 @@ private:
         }
     }
 
-    void logf(const char* fmt, uint64_t t, uint64_t id) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), fmt, t, id);
-        std::string line(buf);
-        // print to screen (optional)
-        //printf("%s\n", line.c_str());
-        // write to log file
-        log_line(line);
-    }
-
     template<typename... Args>
     void logf(const char* fmt, Args... args) {
         char buf[256];
@@ -246,7 +225,7 @@ private:
     Rx scratch_;
     std::atomic<uint64_t> _next_msg_id{0};
     std::ofstream _log;
-    void* _parent{nullptr};
+    std::function<void()> _on_sync_done;
 
 public:
     void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
@@ -255,6 +234,7 @@ public:
         Rx copy = rx;  // make a local copy
         observed_.notify(port, &copy, origin);
     }
+    void set_on_sync_done(std::function<void()> cb) { _on_sync_done = std::move(cb); }
 
     ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
