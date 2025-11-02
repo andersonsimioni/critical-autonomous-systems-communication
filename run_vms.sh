@@ -72,6 +72,9 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     VM_LOGDIR="$LOGDIR/vm_$i"
     mkdir -p "$VM_LOGDIR"
 
+    PCAP_FILE="$VM_LOGDIR/netdump_vm${i}.pcap"
+    echo "[INFO] Starting VM $i (MAC=$MAC) → $PCAP_FILE"
+
     # number of car VMs (VMs 1..N)
     TOTAL_CARS=$((NUM_VMS - 1))
 
@@ -84,7 +87,8 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
         -nographic
         -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare
         -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT
-        -device e1000,netdev=vlan0,mac=$MAC)
+        -device e1000,netdev=vlan0,mac=$MAC
+        -object filter-dump,id=f1,netdev=vlan0,file="$PCAP_FILE")
 
     if [ -z "$TERM_CMD" ]; then
         # No terminal, run directly
