@@ -25,7 +25,7 @@ private:
 
     //average helper, just calculate the average of a generic double collection..
     double average(const std::vector<double>& v) const {
-        if (v.empty()) return 0.0;
+        if(v.empty()) return 0.0;
         return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
     }
 
@@ -38,8 +38,8 @@ public:
 
         //keep only the last MAX_TIME_SYNCER_SAMPLES samples, remove older ones
         auto aux = MAX_TIME_SYNCER_SAMPLES;
-        if (rtt_samples.size() > aux) rtt_samples.erase(rtt_samples.begin(), rtt_samples.end() - aux);
-        if (offset_samples.size() > aux) offset_samples.erase(offset_samples.begin(), offset_samples.end() - aux);
+        if(rtt_samples.size() > aux) rtt_samples.erase(rtt_samples.begin(), rtt_samples.end() - aux);
+        if(offset_samples.size() > aux) offset_samples.erase(offset_samples.begin(), offset_samples.end() - aux);
 
         //update the averages
         avg_rtt = average(rtt_samples);
@@ -72,8 +72,11 @@ public:
     void addPtpSample(double t1, double t2, double t3, double t4) {
         //calculate the offset and the network delay
         //in Us!!
-        double offset = ((t2 - t1) + (t3 - t4)) / 2.0;
-        double delay  = ((t2 - t1) - (t3 - t4)) / 2.0;
+        double A = (t2 - t1);
+        double B = (t4 - t3);
+
+        double offset = (A - B) / 2.0;
+        double delay  = (A + B) / 2.0;
 
         //store info to calculate probabilistic value then
         addOffsetMeasurement(offset, delay);
@@ -96,12 +99,13 @@ public:
     // just to have a feeling of how noisy the network is
     double getOffsetStdDev() const {
         size_t n = offset_samples.size();
-        if (n < 2) return 0.0; // not enough data to say anything
+        if(n < 2) return 0.0; // not enough data to say anything
 
         double mean = avg_offset; // we already maintain this
         double sumSq = 0.0;
 
-        for (double x : offset_samples) {
+        for (double x : offset_samples) 
+        {
             double d = x - mean;
             sumSq += d * d;
         }
@@ -131,7 +135,8 @@ public:
     bool hasEnoughSamplesCI(double maxWidthUs, double confidenceZ = 3.891) const
     {
         size_t n = offset_samples.size();
-        if (n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
+        if(n > MAX_TIME_SYNCER_SAMPLES) return true;
+        if(n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
         //but then calculate the n for Z
 
         double se = getOffsetStdError();  // standard error of the mean
@@ -155,7 +160,8 @@ public:
         // ask the system to change the clock, must execute as ROOT !!
         int result = settimeofday(&tv, nullptr);
 
-        if (result != 0) {
+        if(result != 0) 
+        {
             std::perror("settimeofday failed");
             return false;
         }
