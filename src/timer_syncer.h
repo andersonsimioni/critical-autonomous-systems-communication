@@ -56,7 +56,7 @@ public:
     //remoteTime = what time the other machine
     void addNtpSample(double localSend, double localRecv, double remoteTime) 
     {
-        if(this->alg == 1) { printf("Error on add NTP sample, PTP already selected!!"); return; }
+        if(this->alg == 1) { std::perror("Error on add NTP sample, PTP already selected!!"); return; }
         this->alg = 0;
 
         //the total time for the packet to go there and come back
@@ -77,7 +77,7 @@ public:
     //t4 = time when master received the DELAY_REQ
     //formula from IEEE 1588
     void addPtpSample(double t1, double t2, double t3, double t4) {
-        if(this->alg == 0) { printf("Error on add PTP sample, NTP already selected!!"); return; }
+        if(this->alg == 0) { std::perror("Error on add PTP sample, NTP already selected!!"); return; }
         this->alg = 1;
 
         //calculate the offset and the network delay
@@ -109,9 +109,9 @@ public:
     // just to have a feeling of how noisy the network is
     double getOffsetStdDev() const {
         size_t n = offset_samples.size();
-        if(n < 2) return 0.0; // not enough data to say anything
+        if(n < 2) return 0.0; //not enough data to say anything
 
-        double mean = avg_offset; // we already maintain this
+        double mean = avg_offset; //we already maintain this
         double sumSq = 0.0;
 
         for (double x : offset_samples) 
@@ -120,7 +120,7 @@ public:
             sumSq += d * d;
         }
 
-        // classic sample standard deviation (n - 1)
+        //classic sample standard deviation (n - 1)
         double var = sumSq / static_cast<double>(n - 1);
         return std::sqrt(var);
     }
@@ -149,8 +149,8 @@ public:
         if(n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
         //but then calculate the n for Z
 
-        double se = getOffsetStdError();  // standard error of the mean
-        double width = 2.0 * confidenceZ * se; // total width of the CI
+        double se = getOffsetStdError();  //standard error of the mean
+        double width = 2.0 * confidenceZ * se; //total width of the CI
 
         //return if the interval is good enough
         return width <= maxWidthUs;
@@ -162,12 +162,12 @@ public:
     bool applySync() const {
         double corrected_time_us = getSynchronizedTimeUs();
 
-        // convert to seconds + microseconds
+        //convert to seconds + microseconds
         struct timeval tv;
         tv.tv_sec = static_cast<time_t>(corrected_time_us / (1000.0 * 1000.0));
         tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, 1000.0));
 
-        // ask the system to change the clock, must execute as ROOT !!
+        //ask the system to change the clock, must execute as ROOT !!
         int result = settimeofday(&tv, nullptr);
 
         if(result != 0) 
