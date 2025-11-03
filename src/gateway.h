@@ -40,9 +40,18 @@ public:
         _protocol->enable_start_sync(_total_sync_vms, _local, [this]{notify_sync_done();});
 
         // Only non-master nodes send READY; master just waits for READYs
-        if(!_sync_master) {
-            _protocol->send_control(_local, Endpoint(Ethernet::Address::BROADCAST(), _local.port), Protocol<TNIC>::ControlType::READY);
-            printf("[SYNC][VM %d] READY sent\n", _vm_id);
+        if (!_sync_master) {
+            std::thread([this]() {
+                while (!_sync_done.load()) {
+                    _protocol->send_control(
+                        _local,
+                        Endpoint(Ethernet::Address::BROADCAST(), _local.port),
+                        Protocol<TNIC>::ControlType::READY
+                    );
+                    printf("[SYNC][VM %d] READY sent\n", _vm_id);
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+            }).detach();
         }
 
         // Wait for GO broadcast from master
