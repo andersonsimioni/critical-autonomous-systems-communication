@@ -9,10 +9,12 @@
 #include <sstream>
 #include <functional>
 #include <unordered_map>
+#include <optional>
 
 #include "observer.h"
 #include "frame.h"
 #include "nic.h"
+#include "utils.h"
 
 // -----------------------------------------------------
 // Simple Protocol layered over NIC with logical ports.
@@ -69,10 +71,11 @@ public:
         NONE,   // Not a control message
         READY,
         GO,
-        SYNC,
-        JOIN_GROUP,
+        SYNC_REQ,
+        SYNC_RESP,
+        DELAY_REQ,
+        DELAY_RESP,
         MOVE_GROUP,
-        LEAVE_GROUP,
         GROUP_INFO,
     };
 
@@ -95,6 +98,7 @@ public:
             << "TIME=" << msg.timestamp << " "
             << "TYPE=" << msg.type << " "
             << "ID=" << msg.msg_id << " "
+            << "CONTROL=" << static_cast<int>(msg.control) << " "
             << msg.body;
         return oss.str();
     }
@@ -149,6 +153,7 @@ public:
         if (auto v = extract_field("TIME"); !v.empty()) msg.timestamp = std::stoull(v);
         if (auto v = extract_field("TYPE"); !v.empty()) msg.type = std::stoi(v);
         if (auto v = extract_field("ID"); !v.empty()) msg.msg_id = std::stoull(v);
+        if (auto v = extract_field("CONTROL"); !v.empty()) msg.control = static_cast<ControlType>(std::stoi(v));
 
         if (pos < s.size()) {
             msg.body = s.substr(pos, s.size() - pos); // safe even if pos == s.size()
@@ -177,29 +182,15 @@ public:
     }
 
     // Send control message
-    int send_control(const Endpoint& from, const Endpoint& to, ControlType type) {
-        std::string msg;
-        switch(type) {
-            case ControlType::READY: msg = "READY"; break;
-            case ControlType::GO:    msg = "GO";    break;
-            case ControlType::SYNC:  msg = "SYNC";    break;
-            default: return -1; // Invalid
-        }
-        return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
-    }
+    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, const std::string& payload = {}) {
+        Message msg;
+        msg.control = type;   // explicit control type
+        msg.body = payload;   // optional extra data
 
-    int send_group_control(const Endpoint& from, const Endpoint& to,
-                        ControlType type, int group_id) {
-        std::ostringstream oss;
-        switch (type) {
-            case ControlType::JOIN_GROUP:  oss << "JOIN_GROUP "  << group_id; break;
-            case ControlType::MOVE_GROUP:  oss << "MOVE_GROUP "  << group_id; break;
-            case ControlType::LEAVE_GROUP: oss << "LEAVE_GROUP"; break;
-            case ControlType::GROUP_INFO:  oss << "GROUP_INFO "  << group_id; break;
-            default: return -1;
-        }
-        std::string msg = oss.str();
-        return send(from, to, msg.data(), static_cast<unsigned>(msg.size()));
+        // Serialize message
+        std::string serialized = build_message(msg);
+
+        return send(from, to, serialized.data(), static_cast<unsigned>(serialized.size()));
     }
 
     int get_current_group_id() const { return current_group_id; }
@@ -218,9 +209,8 @@ public:
         send(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), msg.data(), msg.size());
     }
 
-    void join_group(int gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::JOIN_GROUP, gid);}
-    void leave_group(int gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::LEAVE_GROUP, gid);}
-    void move_group(int new_gid) {send_group_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), ControlType::MOVE_GROUP, new_gid);}
+    void move_group(int new_gid) {send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port),
+        ControlType::MOVE_GROUP, std::to_string(new_gid));}
 
     // Enable sync barrier with a callback
     void enable_start_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
@@ -240,14 +230,6 @@ public:
     // Periodic clock synchronization
     bool _is_master{false};
     void set_master(bool m) { _is_master = m; }
-
-    void broadcast_sync(uint64_t sim_time) {
-        if (!_is_master) return;
-        std::ostringstream oss;
-        oss << "SYNC " << sim_time;
-        std::string msg = oss.str();
-        send(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), msg.data(), static_cast<unsigned>(msg.size()));
-    }
 
     // Optional sync receive helper (not used in pure async mode)
 /*     int receive(Endpoint& from, Endpoint& to, void* out, unsigned outSize) {
@@ -289,9 +271,7 @@ public:
 
         if(payloadLen > 0) {
             cap.payload.resize(payloadLen);
-            std::memcpy(cap.payload.data(),
-                        f->data + sizeof(Header),
-                        payloadLen);
+            std::memcpy(cap.payload.data(), f->data + sizeof(Header), payloadLen);
         }
 
         notify_by_port(cap);
@@ -331,14 +311,7 @@ public:
         ltrim(msg.body); rtrim(msg.body);
 
         // Determine control type
-        ControlType ctrl = ControlType::NONE;
-        if(msg.body == "READY") ctrl = ControlType::READY;
-        else if(msg.body == "GO") ctrl = ControlType::GO;
-        else if (msg.body.rfind("SYNC", 0) == 0) ctrl = ControlType::SYNC;
-        else if (msg.body.rfind("JOIN_GROUP", 0) == 0) ctrl = ControlType::JOIN_GROUP;
-        else if (msg.body.rfind("MOVE_GROUP", 0) == 0) ctrl = ControlType::MOVE_GROUP;
-        else if (msg.body.rfind("LEAVE_GROUP", 0) == 0) ctrl = ControlType::LEAVE_GROUP;
-        else if (msg.body.rfind("GROUP_INFO", 0) == 0) ctrl = ControlType::GROUP_INFO;
+        ControlType ctrl = msg.control;
 
         // Sync logic for READY
         if(ctrl == ControlType::READY && _sync_total_vms > 0) {
@@ -363,30 +336,62 @@ public:
             }
         }
 
-        // SYNC handling (runtime ticks)
-        else if (ctrl == ControlType::SYNC) {
-            uint64_t master_time = parse_sync_time(msg.body);
-            // msg.body starts with "SYNC", possibly followed by whitespace and a number.
-            printf("[SYNC] SYNC received from %s (master_time=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)master_time);
+        else if(ctrl == ControlType::SYNC_REQ) {
+            if(_is_master) {
+                // Master received SYNC_REQ from worker
+                uint64_t t1 = get_microseconds_now();  // master current time
 
-            if (master_time <= _last_sync_time) return;
-            _last_sync_time = master_time;
+                char buf[128];
+                snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
-            // Use the registered sync callback. Protocol itself doesn't step the simulation.
-            if (_sync_callback) {
-                _sync_callback(master_time);
-            } else {
-                // No handler registered => store the time and continue (no implicit stepping).
-                _local_sim_time = master_time;
+                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
+
+                // Send SYNC_RESP with timestamp t1
+                send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
             }
         }
 
-        else if (ctrl == ControlType::JOIN_GROUP) {
-            int gid = std::stoi(msg.body.substr(strlen("JOIN_GROUP")));
-            _groups[gid].members.insert(c.from.mac.str());
-            printf("[GROUP] VM %s joined group %d\n", c.from.mac.str().c_str(), gid);
-            if (c.from.mac.str() == _groups[gid].master_mac)
-                printf("[GROUP] VM %s is master of group %d\n", c.from.mac.str().c_str(), gid);
+        else if(ctrl == ControlType::SYNC_RESP && !_is_master) {
+            // Worker received SYNC from master
+            uint64_t t1 = 0;
+            if(!msg.body.empty()) sscanf(msg.body.c_str(), "%llu", (unsigned long long*)&t1);
+
+            uint64_t t2 = get_microseconds_now(); // worker receive time
+            uint64_t t3 = get_microseconds_now(); // worker send time (DELAY_REQ)
+
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+
+            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
+                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+
+            send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
+        }
+
+        else if(ctrl == ControlType::DELAY_REQ && _is_master) {
+            uint64_t t1, t2, t3;
+            if(sscanf(msg.body.c_str(), "%llu %llu %llu", (unsigned long long*)&t1, (unsigned long long*)&t2, (unsigned long long*)&t3) != 3) return;
+
+            uint64_t t4 = get_microseconds_now(); // master receive time
+
+            // Compute NTP-style offset and delay
+            int64_t offset = ((int64_t)(t2 - t1) + (int64_t)(t3 - t4)) / 2;
+            uint64_t rtt = (t4 - t1) - (t3 - t2);
+
+            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%llu microseconds\n", c.from.mac.str().c_str(),
+                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (unsigned long long)rtt);
+
+            // Send DELAY_RESP with offset
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%llu", (unsigned long long)offset);
+            send_control(_control_local, c.from, ControlType::DELAY_RESP, buf);
+        }
+
+        else if(ctrl == ControlType::DELAY_RESP && !_is_master) {
+            uint64_t offset = 0;
+            sscanf(msg.body.c_str(), "%llu", (unsigned long long*)&offset);
+
+            printf("[SYNC] DELAY_RESP received from master %s (offset=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)offset);
         }
 
         else if (ctrl == ControlType::MOVE_GROUP) {
@@ -396,12 +401,6 @@ public:
                 info.members.erase(c.from.mac.str());
             _groups[new_gid].members.insert(c.from.mac.str());
             printf("[GROUP] VM %s moved to group %d\n", c.from.mac.str().c_str(), new_gid);
-        }
-
-        else if (ctrl == ControlType::LEAVE_GROUP) {
-            for (auto &[gid, info] : _groups)
-                if (info.members.erase(c.from.mac.str()))
-                    printf("[GROUP] VM %s left group %d\n", c.from.mac.str().c_str(), gid);
         }
 
         else if (ctrl == ControlType::GROUP_INFO) {
@@ -420,18 +419,6 @@ public:
         }
     }
 
-    void handle_sync(uint64_t master_time) {
-        _local_sim_time = master_time;
-        if (_sync_callback) _sync_callback(master_time);
-    }
-
-    static uint64_t parse_sync_time(const std::string& s) {
-        size_t pos = s.find_first_of("0123456789");
-        return (pos != std::string::npos) ? std::stoull(s.substr(pos)) : 0ULL;
-    };
-
-    uint64_t local_sim_time() const { return _local_sim_time; }
-
 private:
 
     // Group management
@@ -446,9 +433,6 @@ private:
 
     // Sync management
     int _sync_total_vms{0};
-    uint64_t _last_sync_time{0};
-    std::atomic<uint64_t> _local_sim_time{0};
-    SyncCallback _sync_callback;
     Endpoint _control_local{};
     std::set<std::string> _sync_ready_nodes;
     std::function<void()> _sync_done_callback;

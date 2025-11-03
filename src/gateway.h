@@ -43,11 +43,7 @@ public:
         if (!_sync_master) {
             std::thread([this]() {
                 while (!_sync_done.load()) {
-                    _protocol->send_control(
-                        _local,
-                        Endpoint(Ethernet::Address::BROADCAST(), _local.port),
-                        Protocol<TNIC>::ControlType::READY
-                    );
+                    _protocol->send_control(_local, Endpoint(Ethernet::Address::BROADCAST(), _local.port), Protocol<TNIC>::ControlType::READY);
                     printf("[SYNC][VM %d] READY sent\n", _vm_id);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
@@ -88,29 +84,29 @@ protected:
     }
 
     void on_tick() override {
+        uint64_t now_us = get_microseconds_now(); // wall-clock timestamp in microseconds
 
-        if(_sync_master) {
-            // Only the sync master broadcasts SYNC ticks
-            uint64_t sim_time = _protocol->local_sim_time();
-            _protocol->broadcast_sync(sim_time + 1);
+        // SYNC REQUEST every 3 seconds
+        if (!_sync_master) {
+            if (now_us - _last_sync_request_us.load() >= 3'000'000ULL) { // 3 seconds
+                _last_sync_request_us.store(now_us);
+
+                Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
+                printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
+                _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+            }
         }
-
-        // Example periodic broadcast
-        std::string msg = "PING";
-        //_comm->send(_to_bcast, msg);
     }
-
-    // Send message helpers
-
 
 private:
     uint16_t _port;
-    int _vm_id;                      // VM identity
-    int _total_sync_vms;             // number of VMs to wait for at the barrier
-    bool _sync_master;               // true if this Gateway coordinates READY/GO and SYNC
-    std::atomic<bool> _sync_done;
+    int _vm_id;                                             // VM identity
+    int _total_sync_vms;                                    // number of VMs to wait for at the barrier
+    bool _sync_master;                                      // true if this Gateway coordinates READY/GO and SYNC
+    std::atomic<bool> _sync_done;                           // flag for passing the initialization barrier
     std::mutex _sync_mtx;
     std::condition_variable _sync_cv;
-    std::set<std::string> _sync_ready_nodes; // store MACs as strings
+    std::set<std::string> _sync_ready_nodes;                // store MACs as strings
+    std::atomic<uint64_t> _last_sync_request_us{0};         // last time this VM synchronized
 };
 
