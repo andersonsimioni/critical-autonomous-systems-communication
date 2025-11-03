@@ -20,8 +20,9 @@ private:
     std::vector<double> rtt_samples;
     std::vector<double> offset_samples;
 
+    int alg = -1; // -1 = not defined, 0 = NTP, 1 = PTP
     double avg_rtt = 0.0;
-    double avg_offset = 0.0;
+    double avg_offset = 0.0; 
 
     //average helper, just calculate the average of a generic double collection..
     double average(const std::vector<double>& v) const {
@@ -52,6 +53,9 @@ public:
     //remoteTime = what time the other machine
     void addNtpSample(double localSend, double localRecv, double remoteTime) 
     {
+        if(this->alg == 1) { printf("Error on add NTP sample, PTP already selected!!"); return; }
+        this->alg = 0;
+
         //the total time for the packet to go there and come back
         double rtt = localRecv - localSend;
 
@@ -70,6 +74,9 @@ public:
     //t4 = time when master received the DELAY_REQ
     //formula from IEEE 1588
     void addPtpSample(double t1, double t2, double t3, double t4) {
+        if(this->alg == 0) { printf("Error on add PTP sample, NTP already selected!!"); return; }
+        this->alg = 1;
+
         //calculate the offset and the network delay
         //in Us!!
         double A = (t2 - t1);
