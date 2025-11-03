@@ -168,7 +168,7 @@ public:
         //convert to seconds + microseconds
         struct timeval tv;
         tv.tv_sec = static_cast<time_t>(corrected_time_us / (1000.0 * 1000.0));
-        tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, 1000.0));
+        tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (1000.0 * 1000.0)));
 
         //ask the system to change the clock, must execute as ROOT !!
         int result = settimeofday(&tv, nullptr);
