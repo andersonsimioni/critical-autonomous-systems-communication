@@ -182,7 +182,7 @@ public:
 
      void printStatus() const {
         printf("\n ---- Timer Sync Infos ---\n");
-        printf("samples: %zu\n", rtt_samples.size());
+        printf("samples: %zu\n", std::max(rtt_samples.size(), offset_samples.size()));
         printf("avg rtt: %.3f us\n", avg_rtt);
         printf("avg offset: %.3f us\n", avg_offset);
 
