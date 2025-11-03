@@ -29,8 +29,7 @@ public:
 
     virtual void initialize(bool is_master_node, int total_nodes) override
     {
-        printf("[CAR COMPONENT][%s] initializing.. (VM %d%s)\n",
-               this->name().c_str(), _vm_id, _sync_master ? " MASTER" : "");
+        printf("[CAR COMPONENT][%s] initializing.. (VM %d%s)\n", this->name().c_str(), _vm_id, _sync_master ? " MASTER" : "");
 
         // Initialize communicators and protocol
         this->initialize_communicator(true, total_nodes);
