@@ -20,6 +20,9 @@ private:
     std::vector<double> rtt_samples;
     std::vector<double> offset_samples;
 
+    //once define alg, its not possible to change!
+    //to define the alg just call the function addNtpSample or addPtpSample
+    //according to desired alg
     int alg = -1; // -1 = not defined, 0 = NTP, 1 = PTP
     double avg_rtt = 0.0;
     double avg_offset = 0.0; 
