@@ -6,7 +6,10 @@
 #include <cmath>
 #include <sys/time.h>
 
-#define MAX_TIME_SYNCER_SAMPLES 100
+
+//max samples at all, but the Z confidence can calculate
+//a very smaller value! dont worry about it!!
+#define MAX_TIME_SYNCER_SAMPLES 1000000
 
 /*
   TimerSyncer is responsible for calculate the better clock time 
