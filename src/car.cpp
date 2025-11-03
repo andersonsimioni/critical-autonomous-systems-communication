@@ -7,6 +7,9 @@ Car::Car()
     this->components.push_back(new PowertrainComponent<NIC>(POWERTRAIN_PORT));
     this->components.push_back(new BrakeComponent<NIC>(BRAKE_PORT));
     // Add more components here as needed
+    this->components.push_back(new SteeringComponent<NIC>(STEERING_PORT));
+    this->components.push_back(new TransmissionComponent<NIC>(TRANSMISSION_PORT));
+    this->components.push_back(new AirbagComponent<NIC>(AIRBAG_PORT));
 }
 
 Car::~Car()
