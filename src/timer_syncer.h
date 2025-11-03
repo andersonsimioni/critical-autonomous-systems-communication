@@ -148,7 +148,7 @@ public:
     bool hasEnoughSamplesCI(double maxWidthUs, double confidenceZ = 3.891) const
     {
         size_t n = offset_samples.size();
-        if(n > MAX_TIME_SYNCER_SAMPLES) return true;
+        if(n >= MAX_TIME_SYNCER_SAMPLES) return true;
         if(n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
         //but then calculate the n for Z
 
