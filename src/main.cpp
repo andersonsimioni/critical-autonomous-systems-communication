@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
     uid_t uid = geteuid(); 
 
     if (uid == 0) { printf("Processo iniciado UID: %d\n, EXECUTANDO COMO ROOT.\n", uid); } 
-    else { printf( "Processo iniciado UID: %d\n, NAO ESTA EXECUTANDO COMO ROOT (UID %d).\n", uid); } 
+    else { printf( "Processo iniciado UID: %d\n, NAO ESTA EXECUTANDO COMO ROOT.\n", uid); } 
 
 
     int vm_id = -1;
