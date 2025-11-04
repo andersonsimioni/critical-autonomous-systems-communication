@@ -9,16 +9,16 @@
 
 //max samples at all, but the Z confidence can calculate
 //a very smaller value! dont worry about it!!
-#define MAX_TIME_SYNCER_SAMPLES 1000000
+#define MAX_SAMPLES_IN_CLOCK_SYNCER 1000000
 
 /*
-  TimerSyncer is responsible for calculate the better clock time 
+  ClockSyncer is responsible for calculate the better clock time 
   based on probabilistic RTT algorithm, 
   its a simple average based clock correction.
   its a small version of NTP.
 */
 
-class TimerSyncer {
+class ClockSyncer {
 private:
     std::vector<double> rtt_samples;
     std::vector<double> offset_samples;
@@ -43,8 +43,8 @@ public:
         rtt_samples.push_back(qualityValue);
         offset_samples.push_back(offset);
 
-        //keep only the last MAX_TIME_SYNCER_SAMPLES samples, remove older ones
-        auto aux = MAX_TIME_SYNCER_SAMPLES;
+        //keep only the last MAX_SAMPLES_IN_CLOCK_SYNCER samples, remove older ones
+        auto aux = MAX_SAMPLES_IN_CLOCK_SYNCER;
         if(rtt_samples.size() > aux) rtt_samples.erase(rtt_samples.begin(), rtt_samples.end() - aux);
         if(offset_samples.size() > aux) offset_samples.erase(offset_samples.begin(), offset_samples.end() - aux);
 
@@ -108,8 +108,7 @@ public:
         return now + avg_offset;
     }
 
-    // standard deviation of the offset samples
-    // just to have a feeling of how noisy the network is
+    //standard deviation of the offset samples
     double getOffsetStdDev() const {
         size_t n = offset_samples.size();
         if(n < 2) return 0.0; //not enough data to say anything
@@ -148,7 +147,7 @@ public:
     bool hasEnoughSamplesCI(double maxWidthUs, double confidenceZ = 3.891) const
     {
         size_t n = offset_samples.size();
-        if(n >= MAX_TIME_SYNCER_SAMPLES) return true;
+        if(n >= MAX_SAMPLES_IN_CLOCK_SYNCER) return true;
         if(n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
         //but then calculate the n for Z
 
@@ -184,7 +183,7 @@ public:
     }
 
      void printStatus() const {
-        printf("\n ---- Timer Sync Infos ---\n");
+        printf("\n ---- Clock Syncer Infos ---\n");
         printf("samples: %zu\n", std::max(rtt_samples.size(), offset_samples.size()));
         printf("avg rtt: %.3f us\n", avg_rtt);
         printf("avg offset: %.3f us\n", avg_offset);
