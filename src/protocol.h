@@ -411,7 +411,7 @@ public:
             }
             else
             {
-                this->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+                this->send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), Protocol<TNIC>::ControlType::SYNC_REQ);
             }
 
             //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
