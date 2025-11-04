@@ -160,7 +160,7 @@ public:
         //but then calculate the n for Z
 
         long long se = getOffsetStdError();  //standard error of the mean
-        double width = 2.0 * confidenceZ * se; //total width of the CI
+        long long width = (long long)2 * se * confidenceZ; //total width of the CI
 
         //return if the interval is good enough
         return width <= maxWidthUs;
