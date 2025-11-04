@@ -2,9 +2,21 @@
 #include <cstdlib>
 #include <iostream>
 
+#include <unistd.h>
+#include <sys/types.h>
+#include <stdio.h>
+#include <sys/mount.h>
+
 #include "car.h"
 
 int main(int argc, char** argv) {
+
+    uid_t uid = geteuid(); 
+
+    if (uid == 0) { printf("Processo iniciado UID: %d\n, EXECUTANDO COMO ROOT.\n", uid); } 
+    else { printf( "Processo iniciado UID: %d\n, NAO ESTA EXECUTANDO COMO ROOT (UID %d).\n", uid); } 
+
+
     int vm_id = -1;
     int total_sync_vms = 0;
 
