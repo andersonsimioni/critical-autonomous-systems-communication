@@ -15,6 +15,7 @@
 #include "frame.h"
 #include "nic.h"
 #include "utils.h"
+#include "clock_syncer.h"
 
 // -----------------------------------------------------
 // Simple Protocol layered over NIC with logical ports.
@@ -128,6 +129,10 @@ public:
     Protocol(NIC* n, ProtocolNumber etherType) : nic(n), etherType_(etherType) {
         // Subscribe this Protocol to NICs frame notifications
         nic->attach(this);
+        _clock_syncer = new ClockSyncer();
+
+        _running_ptp = false;
+        _probabilistic_ptp_timeout = false;
     }
 
     ~Protocol() {nic->detach(this);}
@@ -344,7 +349,7 @@ public:
                 char buf[128];
                 snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
-                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
+                //printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
 
                 // Send SYNC_RESP with timestamp t1
                 send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
@@ -362,8 +367,8 @@ public:
             char buf[256];
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
-            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
-                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+            //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
+                //(unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
             send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
         }
@@ -376,22 +381,40 @@ public:
 
             // Compute NTP-style offset and delay
             int64_t offset = ((int64_t)(t2 - t1) + (int64_t)(t3 - t4)) / 2;
-            uint64_t rtt = (t4 - t1) - (t3 - t2);
+            int64_t rtt = (t4 - t1) - (t3 - t2);
 
-            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%llu microseconds\n", c.from.mac.str().c_str(),
-                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (unsigned long long)rtt);
+            //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(),
+                //(unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
 
-            // Send DELAY_RESP with offset
+            // Send DELAY_RESP with offset & rtt
             char buf[128];
-            snprintf(buf, sizeof(buf), "%llu", (unsigned long long)offset);
+            snprintf(buf, sizeof(buf), "%lld %lld", (long long)offset, (long long)rtt);
+
             send_control(_control_local, c.from, ControlType::DELAY_RESP, buf);
         }
 
         else if(ctrl == ControlType::DELAY_RESP && !_is_master) {
-            uint64_t offset = 0;
-            sscanf(msg.body.c_str(), "%llu", (unsigned long long*)&offset);
+            int64_t offset = 0;
+            int64_t delay = 0;
+            
+            sscanf(msg.body.c_str(), "%lld %lld", (long long*)&offset, (long long*)&delay);
+            
+            _clock_syncer->addPtpSample(offset, delay);
 
-            printf("[SYNC] DELAY_RESP received from master %s (offset=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)offset);
+            auto sync_over_time = this->get_probabilistic_ptp_timeout();
+            auto enough_samples = _clock_syncer->hasEnoughSamplesCI(100, 1.96); //+-50us with 95% confidence
+            
+            if(enough_samples || sync_over_time) 
+            {
+                _clock_syncer->applySync(); 
+                set_running_ptp(false);
+            }
+            else
+            {
+                this->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+            }
+
+            //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
 
         else if (ctrl == ControlType::MOVE_GROUP) {
@@ -419,6 +442,12 @@ public:
         }
     }
 
+    void set_running_ptp(bool value) { this->_running_ptp = value; }
+    void set_probabilistic_ptp_timeout(bool value) { this->_probabilistic_ptp_timeout = value; }
+
+    bool get_running_ptp() { return this->_running_ptp; }
+    bool get_probabilistic_ptp_timeout() { return this->_probabilistic_ptp_timeout; }
+
 private:
 
     // Group management
@@ -442,6 +471,10 @@ private:
     NIC* nic;
     ProtocolNumber etherType_;
     std::list<PortObserver*> portObservers_;
+
+    ClockSyncer* _clock_syncer;
+    bool _running_ptp;
+    bool _probabilistic_ptp_timeout;
 };
 
 #endif // PROTOCOL_H

@@ -20,25 +20,25 @@
 
 class ClockSyncer {
 private:
-    std::vector<double> rtt_samples;
-    std::vector<double> offset_samples;
+    std::vector<long long> rtt_samples;
+    std::vector<long long> offset_samples;
 
     //once define alg, its not possible to change!
     //to define the alg just call the function addNtpSample or addPtpSample
     //according to desired alg
     int alg = -1; // -1 = not defined, 0 = NTP, 1 = PTP
-    double avg_rtt = 0.0;
-    double avg_offset = 0.0; 
+    long long avg_rtt = 0;
+    long long avg_offset = 0; 
 
-    //average helper, just calculate the average of a generic double collection..
-    double average(const std::vector<double>& v) const {
-        if(v.empty()) return 0.0;
-        return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+    //average helper, just calculate the average of a generic long long collection..
+    long long average(const std::vector<long long>& v) const {
+        if(v.empty()) return 0;
+        return std::accumulate(v.begin(), v.end(), 0) / v.size();
     }
 
 public:
 
-    void addOffsetMeasurement(double offset, double qualityValue) {
+    void addOffsetMeasurement(long long offset, long long qualityValue) {
         //store samples
         rtt_samples.push_back(qualityValue);
         offset_samples.push_back(offset);
@@ -57,18 +57,18 @@ public:
     //localSend = when sent the ping
     //localRecv = when got the reply
     //remoteTime = what time the other machine
-    void addNtpSample(double localSend, double localRecv, double remoteTime) 
+    void addNtpSample(long long localSend, long long localRecv, long long remoteTime) 
     {
         if(this->alg == 1) { std::perror("Error on add NTP sample, PTP already selected!!"); return; }
         this->alg = 0;
 
         //the total time for the packet to go there and come back
-        double rtt = localRecv - localSend;
+        long long rtt = localRecv - localSend;
 
         //estimate how far off our clock is
         //assume a symetric network delay!
         //take half RTT because its full road delay, we need the upload time only
-        double offset = (remoteTime + rtt / 2.0) - localRecv;
+        long long offset = (remoteTime + rtt / 2.0) - localRecv;
 
         addOffsetMeasurement(offset, rtt);
     }
@@ -79,61 +79,69 @@ public:
     //t3 = time when slave sent the DELAY_REQ
     //t4 = time when master received the DELAY_REQ
     //formula from IEEE 1588
-    void addPtpSample(double t1, double t2, double t3, double t4) {
+    void addPtpSample(long long t1, long long t2, long long t3, long long t4) {
         if(this->alg == 0) { std::perror("Error on add PTP sample, NTP already selected!!"); return; }
         this->alg = 1;
 
         //calculate the offset and the network delay
         //in Us!!
-        double A = (t2 - t1);
-        double B = (t4 - t3);
+        long long A = (t2 - t1);
+        long long B = (t4 - t3);
 
-        double offset = (A - B) / 2.0;
-        double delay  = (A + B) / 2.0;
+        long long offset = (A - B) / 2.0;
+        long long delay  = (A + B) / 2.0;
+
+        //store info to calculate probabilistic value then
+        addOffsetMeasurement(offset, delay);
+    }
+
+    void addPtpSample(long long offset, long long delay) {
+        if(this->alg == 0) { std::perror("Error on add PTP sample, NTP already selected!!"); return; }
+        this->alg = 1;
 
         //store info to calculate probabilistic value then
         addOffsetMeasurement(offset, delay);
     }
 
     //calculate average of collected RTTs
-    double getAverageRTT() const { return avg_rtt;}
+    long long getAverageRTT() const { return avg_rtt;}
 
     //probably offset from local clock to remote clock
-    double getAverageOffset() const { return avg_offset; }
+    long long getAverageOffset() const { return avg_offset; }
 
     //get better probabilistic time in us, calculated using probabilistic RTT
-    double getSynchronizedTimeUs() const {
+    long long getSynchronizedTimeUs() const {
         using namespace std::chrono;
-        double now = duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
+        long long now = duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
         return now + avg_offset;
     }
 
     //standard deviation of the offset samples
-    double getOffsetStdDev() const {
+    long long getOffsetStdDev() const {
         size_t n = offset_samples.size();
-        if(n < 2) return 0.0; //not enough data to say anything
+        if(n < 2) return 0; //not enough data to say anything
 
-        double mean = avg_offset; //we already maintain this
-        double sumSq = 0.0;
+        long long mean = avg_offset; //we already maintain this
+        long long sumSq = 0;
 
-        for (double x : offset_samples) 
+        for (long long x : offset_samples) 
         {
-            double d = x - mean;
+            long long d = x - mean;
             sumSq += d * d;
         }
 
         //classic sample standard deviation (n - 1)
-        double var = sumSq / static_cast<double>(n - 1);
+        long long var = sumSq / static_cast<long long>(n - 1);
         return std::sqrt(var);
     }
 
     //standard error of the mean for the offset
-    double getOffsetStdError() const {
+    long long getOffsetStdError() const {
         size_t n = offset_samples.size();
-        if (n == 0) return 0.0;
+        if (n == 0) return 0;
 
-        double sd = getOffsetStdDev();
-        return sd / std::sqrt(static_cast<double>(n));
+        long long sd = getOffsetStdDev();
+        return sd / std::sqrt(static_cast<long long>(n));
     }
     
     //Z-values for Normal Curve
@@ -144,14 +152,14 @@ public:
     //maxWidthUs = max total width of the interval you accept, in us, ex: 2.0 means average ±1 us
     //build a confidence interval around the mean: mean ± z * SE and look at the total width: 2 * z * SE
     //RESUME: say if its have enough samples according to the selected Z..
-    bool hasEnoughSamplesCI(double maxWidthUs, double confidenceZ = 3.891) const
+    bool hasEnoughSamplesCI(long long maxWidthUs, double confidenceZ = 3.891) const
     {
         size_t n = offset_samples.size();
         if(n >= MAX_SAMPLES_IN_CLOCK_SYNCER) return true;
         if(n < 30) return false; //keep collecting, 30 because its magic on Prob & Stat.., 
         //but then calculate the n for Z
 
-        double se = getOffsetStdError();  //standard error of the mean
+        long long se = getOffsetStdError();  //standard error of the mean
         double width = 2.0 * confidenceZ * se; //total width of the CI
 
         //return if the interval is good enough
@@ -162,12 +170,12 @@ public:
     //try to set the system clock using our best offset guess
     // !!! IMPORTANT -> run as root!!
     bool applySync() const {
-        double corrected_time_us = getSynchronizedTimeUs();
+        long long corrected_time_us = getSynchronizedTimeUs();
 
         //convert to seconds + microseconds
         struct timeval tv;
-        tv.tv_sec = static_cast<time_t>(corrected_time_us / (1000.0 * 1000.0));
-        tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (1000.0 * 1000.0)));
+        tv.tv_sec = static_cast<time_t>(corrected_time_us / (1000 * 1000));
+        tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (1000 * 1000)));
 
         //ask the system to change the clock, must execute as ROOT !!
         int result = settimeofday(&tv, nullptr);
@@ -178,7 +186,7 @@ public:
             return false;
         }
 
-        std::cout << "system clock adjusted by offset: " << avg_offset << " us\n";
+        std::cout<<"system clock adjusted by offset: "<<avg_offset<<" us\n";
         return true;
     }
 

@@ -89,11 +89,23 @@ protected:
         // SYNC REQUEST every 3 seconds
         if (!_sync_master) {
             if (now_us - _last_sync_request_us.load() >= 3'000'000ULL) { // 3 seconds
-                _last_sync_request_us.store(now_us);
 
-                Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
-                printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
-                _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+                if(_protocol->get_running_ptp())
+                {
+                    _protocol->set_probabilistic_ptp_timeout(true);
+                }
+                else
+                {
+                    _protocol->set_running_ptp(true);
+                    _protocol->set_probabilistic_ptp_timeout(false);
+                    _last_sync_request_us.store(now_us);
+
+                    Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
+                    printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
+                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+                }
+                
+
             }
         }
     }
