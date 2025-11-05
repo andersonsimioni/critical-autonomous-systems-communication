@@ -87,18 +87,16 @@ protected:
     bool wants_tick() override { return true; }
     unsigned tick_period_ms() override { return 1000; }
     void on_tick() override {
-        // int angle = (_angle + 5) % 360;
-        // _angle = angle;
-        // char msg[64];
-        // std::snprintf(msg, sizeof(msg), "steering_angle=%d", angle);
-        // Base::send_broadcast(msg, std::strlen(msg));
+        _angle = (_angle + 5) % 360;
+        std::string payload = "Steering angle " + std::to_string(_angle);
+        Base::send_local(payload);
     }
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
-        // if (rx.msg.body.find("set_angle=") == 0) {
-        //     int new_angle = std::stoi(rx.msg.body.substr(10));
-        //     _angle = new_angle;
-        //     Base::send_local("ack-steering");
-        // }
+    
+        if (rx.msg.body == "steer-left")  _angle = (_angle + 350) % 360;
+        else if (rx.msg.body == "steer-right") _angle = (_angle + 10) % 360;
+        Base::send_local("ack-steering");
+        
     }
 private:
     int _angle{0};
@@ -115,22 +113,12 @@ protected:
     bool wants_tick() override { return true; }
     unsigned tick_period_ms() override { return 3000; }
     void on_tick() override {
-        // const char* gears[] = {"P", "R", "N", "D"};
-        // _gear = (_gear + 1) % 4;
-        // std::string msg = std::string("gear=") + gears[_gear];
-        // Base::send_broadcast(msg, std::strlen(msg));
+        Base::send_local("transmission_ok");
     }
     void on_receive(const Rx& rx, ChannelOrigin origin) override {
-        // if (rx.msg.body.find("set_gear=") == 0) {
-        //     char g = rx.msg.body[9];
-        //     switch (g) {
-        //         case 'P': _gear = 0; break;
-        //         case 'R': _gear = 1; break;
-        //         case 'N': _gear = 2; break;
-        //         case 'D': _gear = 3; break;
-        //     }
-        //     Base::send_local("ack-gear");
-        // }
+
+        Base::send_local("ack-gear");
+        
     }
 private:
     int _gear{0};
