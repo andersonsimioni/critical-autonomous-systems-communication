@@ -157,17 +157,45 @@ public:
     }
 
 
+    bool adjust_system_time_by_us(long long offset_us)
+    {
+        struct timeval tv{};
+        if (gettimeofday(&tv, nullptr) != 0) return false;
+
+        long long sec  = static_cast<long long>(tv.tv_sec);
+        long long usec = static_cast<long long>(tv.tv_usec);
+
+        sec  += offset_us / 1000000LL;
+        usec += offset_us % 1000000LL;
+
+        if (usec >= 1000000LL) {
+            sec += usec / 1000000LL;
+            usec %= 1000000LL;
+        } else if (usec < 0) {
+            long long borrow = (-usec + 999999LL) / 1000000LL; 
+            sec  -= borrow;
+            usec += borrow * 1000000LL;
+        }
+
+        tv.tv_sec  = static_cast<time_t>(sec);
+        tv.tv_usec = static_cast<suseconds_t>(usec);
+
+        if (settimeofday(&tv, nullptr) != 0) return false;
+
+        return true;
+    }
+
     // Try to set the system clock using our best offset guess
     bool applySync() const {
         long long corrected_time_us = getSynchronizedTimeUs();
 
         // Convert to seconds + microseconds
-        struct timeval tv;
-        tv.tv_sec = static_cast<time_t>(corrected_time_us / (long long)(1000 * 1000));
-        tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (long long)(1000 * 1000)));
+        //struct timeval tv;
+        //tv.tv_sec = static_cast<time_t>(corrected_time_us / (long long)(1000 * 1000));
+        //tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (long long)(1000 * 1000)));
 
         // Ask the system to change the clock, must execute as ROOT
-        int result = settimeofday(&tv, nullptr);
+        int result = adjust_system_time_by_us(corrected_time_us); //settimeofday(&tv, nullptr);
 
         if(result != 0) 
         {
