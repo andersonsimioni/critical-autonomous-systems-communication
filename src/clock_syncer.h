@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cmath>
 #include <sys/time.h>
+#include <time.h>
 
 
 // Max samples, disregard the Z confidence if reached
@@ -180,7 +181,10 @@ public:
         tv.tv_sec  = static_cast<time_t>(sec);
         tv.tv_usec = static_cast<suseconds_t>(usec);
 
+        printf("\n ---- VAI ALTERAR O RELOGIO ---\n");
         if (settimeofday(&tv, nullptr) != 0) return false;
+        //if (clock_settime(CLOCK_REALTIME, (const struct timespec*)&tv) != 0) return false;
+
 
         return true;
     }
