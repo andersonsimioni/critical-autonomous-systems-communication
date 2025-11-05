@@ -157,7 +157,7 @@ public:
     }
 
 
-    bool adjust_system_time_by_us(long long offset_us)
+    bool adjust_system_time_by_us(long long offset_us) const
     {
         struct timeval tv{};
         if (gettimeofday(&tv, nullptr) != 0) return false;

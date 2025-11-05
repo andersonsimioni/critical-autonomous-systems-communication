@@ -341,6 +341,15 @@ public:
             }
         }
 
+
+
+
+
+
+
+        // SYNC CLOCKS PROTOCOL:
+
+
         else if(ctrl == ControlType::SYNC_REQ) {
             if(_is_master) {
                 // Master received SYNC_REQ from worker
@@ -349,10 +358,10 @@ public:
                 char buf[128];
                 snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
-                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
-
                 // Send SYNC_RESP with timestamp t1
                 send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
+
+                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
             }
         }
 
@@ -367,10 +376,9 @@ public:
             char buf[256];
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
-            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
-                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
-
             send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
+
+            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
         }
 
         else if(ctrl == ControlType::DELAY_REQ && _is_master) {
@@ -383,14 +391,13 @@ public:
             int64_t offset = ((int64_t)(t2 - t1) + (int64_t)(t3 - t4)) / 2;
             int64_t rtt = (t4 - t1) - (t3 - t2);
 
-            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(),
-               (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
-
             // Send DELAY_RESP with offset & rtt
             char buf[128];
             snprintf(buf, sizeof(buf), "%lld %lld", (long long)offset, (long long)rtt);
 
             send_control(_control_local, c.from, ControlType::DELAY_RESP, buf);
+
+            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
         }
 
         else if(ctrl == ControlType::DELAY_RESP && !_is_master) {
@@ -407,12 +414,12 @@ public:
             auto enough_samples = _clock_syncer->hasEnoughSamplesCI(100, 1.96); //+-50us with 95% confidence
             printf("calculate overtime or enough samples with success!\n");
 
-            if(enough_samples || sync_over_time) 
+            if(true) 
             {
                 printf("[SYNC] applying sync..\n");
-                _clock_syncer->applySync(); 
+                if(_clock_syncer->applySync()) printf("[SYNC] sync applyed with success!\n");
                 set_running_ptp(false);
-                printf("[SYNC] sync applyed with success!\n");
+                
                 //std::exit(EXIT_FAILURE);
             }
             else
@@ -424,6 +431,21 @@ public:
 
             printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         else if (ctrl == ControlType::MOVE_GROUP) {
             int new_gid = std::stoi(msg.body.substr(strlen("MOVE_GROUP")));
