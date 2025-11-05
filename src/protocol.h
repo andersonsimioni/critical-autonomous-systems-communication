@@ -227,8 +227,8 @@ public:
         if (!_is_master) {
             // Only non-master nodes mark themselves ready
             _sync_ready_nodes.insert(_control_local.mac.str());
-            printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n",
-                _control_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
+            //printf("[SYNC] %s Marking itself ready, total ready: %zu/%d\n",
+            //    _control_local.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
         }
     }
 
@@ -361,7 +361,7 @@ public:
                 // Send SYNC_RESP with timestamp t1
                 send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
 
-                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
+                //printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
             }
         }
 
@@ -378,7 +378,7 @@ public:
 
             send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
 
-            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+            //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
         }
 
         else if(ctrl == ControlType::DELAY_REQ && _is_master) {
@@ -397,7 +397,7 @@ public:
 
             send_control(_control_local, c.from, ControlType::DELAY_RESP, buf);
 
-            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
+            //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
         }
 
         else if(ctrl == ControlType::DELAY_RESP && !_is_master) {
@@ -429,7 +429,7 @@ public:
                 printf("Protocol Asked PTP step with success!\n");
             }
 
-            printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
+            //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
 
 

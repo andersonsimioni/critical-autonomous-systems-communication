@@ -44,7 +44,7 @@ public:
             std::thread([this]() {
                 while (!_sync_done.load()) {
                     _protocol->send_control(_local, Endpoint(Ethernet::Address::BROADCAST(), _local.port), Protocol<TNIC>::ControlType::READY);
-                    printf("[SYNC][VM %d] READY sent\n", _vm_id);
+                    //printf("[SYNC][VM %d] READY sent\n", _vm_id);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
             }).detach();
@@ -55,8 +55,8 @@ public:
             std::unique_lock<std::mutex> lk(_sync_mtx);
             _sync_cv.wait(lk, [&]{ return _sync_done.load(); });
         }
-        printf("[SYNC][VM %d] GO received. All VMs synced. Starting ticks.\n", _vm_id);
-        printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
+        //printf("[SYNC][VM %d] GO received. All VMs synced. Starting ticks.\n", _vm_id);
+        //printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
     }
 
     // Called by Communicator when GO arrives
@@ -100,8 +100,8 @@ protected:
                     _last_sync_request_us.store(now_us);
 
                     Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
-                    printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
-                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+                    //printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
+                    //_protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
                 
 

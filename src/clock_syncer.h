@@ -6,6 +6,7 @@
 #include <cmath>
 #include <sys/time.h>
 #include <time.h>
+#include <sys/timex.h>
 
 
 // Max samples, disregard the Z confidence if reached
@@ -189,9 +190,46 @@ public:
         return true;
     }
 
+    bool adjust_time_gradually(long long offset_us) const {
+        // O adjtimex espera o offset em nanossegundos (us * 1000)
+        long long offset_ns = offset_us * 1000LL;
+        
+        struct timex tx {};
+        
+        tx.modes = ADJ_OFFSET; // Ajust offset
+        tx.offset = offset_ns; 
+
+    
+        int result = adjtimex(&tx); 
+
+        if (result == -1) {
+            std::perror("adjtimex failed");
+            return false;
+        }
+
+        return true;
+    }
+
     // Try to set the system clock using our best offset guess
     bool applySync() const {
-        long long corrected_time_us = getSynchronizedTimeUs();
+        long long offset_us = getAverageOffset();
+
+        //  Gradually sinc
+        int result = adjust_time_gradually(offset_us); 
+
+        if(result == false) // 'false' if adjust_time_gradually faile
+        {
+            return false;
+        }
+
+        //printf("[SYNC] system clock adjusted by offset %lld us\n", offset_us);
+        return true;
+    }
+
+    //Apply sync - 
+    // Try to set the system clock using our best offset guess
+    //bool applySync() const {
+    //    long long corrected_time_us = getSynchronizedTimeUs();
 
         // Convert to seconds + microseconds
         //struct timeval tv;
@@ -199,17 +237,18 @@ public:
         //tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (long long)(1000 * 1000)));
 
         // Ask the system to change the clock, must execute as ROOT
-        int result = adjust_system_time_by_us(corrected_time_us); //settimeofday(&tv, nullptr);
+    //    int result = adjust_system_time_by_us(corrected_time_us); //settimeofday(&tv, nullptr);
 
-        if(result != 0) 
-        {
-            std::perror("settimeofday failed");
-            return false;
-        }
+     //   if(result != 0) 
+    //    {
+    //        std::perror("settimeofday failed");
+    //        return false;
+     //   }
 
         //printf("[SYNC] system clock adjusted by offset %lld us\n", avg_offset);
-        return true;
-    }
+     //   return true;
+   // }
+
 
      void printStatus() const {
         printf("\n ---- Clock Syncer Infos ---\n");
