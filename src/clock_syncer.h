@@ -89,6 +89,7 @@ public:
     void addPtpSample(long long offset, long long delay) {
         if(this->alg == 0) { std::perror("Error on add PTP sample, NTP already selected!!"); return; }
         this->alg = 1;
+        //printf("[DEBUG] Adding sample for sync");
 
         // Store info to calculate probabilistic value
         addOffsetMeasurement(offset, delay);
@@ -174,7 +175,7 @@ public:
             return false;
         }
 
-        std::cout<<"system clock adjusted by offset: "<<avg_offset<<" us\n";
+        //printf("[SYNC] system clock adjusted by offset %lld us\n", avg_offset);
         return true;
     }
 

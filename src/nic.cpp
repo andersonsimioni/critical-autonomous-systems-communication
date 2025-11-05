@@ -23,7 +23,7 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     if (is_shm) {
         if (!this->shm_engine) { printf("SHM engine missing!\n"); return -1; }
         int r = this->shm_engine->send(f);
-        printf("[NIC SEND] via SHM -> ret=%d\n", r);
+        //printf("[NIC SEND] via SHM -> ret=%d\n", r);
         return r;
     } else {
         if (!this->ethernet_engine) {
@@ -31,9 +31,9 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
             fprintf(stderr, "NIC::send(): no ethernet engine available for dst=%s; intended for gateway forwarding\n", dst.str().c_str());
             return -2;
         }
-        printf("NIC sending through ETHERNET\n");
+        //printf("NIC sending through ETHERNET\n");
         int r = this->ethernet_engine->send(f);
-        printf("[NIC SEND] via ETHERNET -> ret=%d\n", r);
+        //printf("[NIC SEND] via ETHERNET -> ret=%d\n", r);
         return r;
     }
 }
@@ -46,7 +46,7 @@ void NIC::on_eth_frame(const Frame& f) {
     // Copy frame and notify all observers registered on this NIC
     Frame* copy = new Frame(f);
     this->notify(f.proto, copy, ChannelOrigin::Ethernet);
-    printf("A frame is arriving through ETHERNET\n");
+    //printf("A frame is arriving through ETHERNET\n");
 }
 
 

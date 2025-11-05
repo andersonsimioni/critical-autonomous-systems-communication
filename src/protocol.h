@@ -349,7 +349,7 @@ public:
                 char buf[128];
                 snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
-                //printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
+                printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
 
                 // Send SYNC_RESP with timestamp t1
                 send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
@@ -368,7 +368,7 @@ public:
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
             //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
-                //(unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+            //    (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
             send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
         }
@@ -384,7 +384,7 @@ public:
             int64_t rtt = (t4 - t1) - (t3 - t2);
 
             //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(),
-                //(unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
+            //    (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
 
             // Send DELAY_RESP with offset & rtt
             char buf[128];
@@ -414,7 +414,7 @@ public:
                 this->send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), Protocol<TNIC>::ControlType::SYNC_REQ);
             }
 
-            //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
+            printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
 
         else if (ctrl == ControlType::MOVE_GROUP) {
