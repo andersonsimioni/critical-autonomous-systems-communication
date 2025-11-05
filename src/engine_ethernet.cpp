@@ -118,10 +118,9 @@ int EngineEthernet::send(const Ethernet::Frame& frame)
 
     if (sent < 0) {
         int e = errno;
-        printf("[ETH SEND] sendto() failed: %s (%d)\n", strerror(e), e);
+        //printf("[ETH SEND] sendto() failed: %s (%d)\n", strerror(e), e);
     } else {
-        printf("[ETH SEND] sendto() sent %zd bytes (payload %u type 0x%04x) dst=%s\n",
-            sent, frame.size, frame.proto, frame.dst.str().c_str());
+        //printf("[ETH SEND] sendto() sent %zd bytes (payload %u type 0x%04x) dst=%s\n", sent, frame.size, frame.proto, frame.dst.str().c_str());
     }
 
     return (sent < 0) ? -1 : static_cast<int>(sent > (ssize_t)sizeof(hdr) ? sent - sizeof(hdr) : 0);

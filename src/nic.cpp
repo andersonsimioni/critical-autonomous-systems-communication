@@ -17,8 +17,7 @@ int NIC::send(Address dst, Protocol proto, const void* data, unsigned int size) 
     const bool is_shm = (dst == this->address());
     const bool is_bcast = (dst == Ethernet::Address::BROADCAST());
 
-    printf("[NIC SEND] src=%s dst=%s proto=0x%04x size=%u is_shm=%d is_bcast=%d\n",
-            this->address().str().c_str(), dst.str().c_str(), (unsigned)proto, size, (int)is_shm, (int)is_bcast);
+    //printf("[NIC SEND] src=%s dst=%s proto=0x%04x size=%u is_shm=%d is_bcast=%d\n", this->address().str().c_str(), dst.str().c_str(), (unsigned)proto, size, (int)is_shm, (int)is_bcast);
 
     if (is_shm) {
         if (!this->shm_engine) { printf("SHM engine missing!\n"); return -1; }

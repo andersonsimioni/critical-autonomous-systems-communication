@@ -367,8 +367,8 @@ public:
             char buf[256];
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
-            //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
-            //    (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+            printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(),
+                (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
             send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
         }
@@ -383,8 +383,8 @@ public:
             int64_t offset = ((int64_t)(t2 - t1) + (int64_t)(t3 - t4)) / 2;
             int64_t rtt = (t4 - t1) - (t3 - t2);
 
-            //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(),
-            //    (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
+            printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(),
+               (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
 
             // Send DELAY_RESP with offset & rtt
             char buf[128];
@@ -398,20 +398,28 @@ public:
             int64_t delay = 0;
             
             sscanf(msg.body.c_str(), "%lld %lld", (long long*)&offset, (long long*)&delay);
-            
+            printf("Clock Syncer Collecting Sample offset=%lld delay=%lld, adding samples\n", offset, delay);
+
             _clock_syncer->addPtpSample(offset, delay);
+            printf("samples added!\n");
 
             auto sync_over_time = this->get_probabilistic_ptp_timeout();
             auto enough_samples = _clock_syncer->hasEnoughSamplesCI(100, 1.96); //+-50us with 95% confidence
-            
+            printf("calculate overtime or enough samples with success!\n");
+
             if(enough_samples || sync_over_time) 
             {
+                printf("[SYNC] applying sync..\n");
                 _clock_syncer->applySync(); 
                 set_running_ptp(false);
+                printf("[SYNC] sync applyed with success!\n");
+                //std::exit(EXIT_FAILURE);
             }
             else
             {
-                this->send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port), Protocol<TNIC>::ControlType::SYNC_REQ);
+                printf("Protocol Asking other PTP step..\n");
+                send_control(_control_local, c.from, Protocol<TNIC>::ControlType::SYNC_REQ);
+                printf("Protocol Asked PTP step with success!\n");
             }
 
             printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);

@@ -89,7 +89,6 @@ protected:
         // SYNC REQUEST every 3 seconds
         if (!_sync_master) {
             if (now_us - _last_sync_request_us.load() >= 3'000'000ULL) { // 3 seconds
-
                 if(_protocol->get_running_ptp())
                 {
                     _protocol->set_probabilistic_ptp_timeout(true);
