@@ -21,6 +21,7 @@
 #include "protocol.h"
 #include "utils.h"
 
+template <typename TNIC> class Gateway;
 template <typename TNIC>
 class Communicator {
 public:
@@ -29,25 +30,12 @@ public:
     using Address = Ethernet::Address;
 
     struct Rx {
-        typename Protocol<TNIC>::Endpoint      from;
-        typename Protocol<TNIC>::Endpoint      to;
-        std::vector<uint8_t> payload;
+        typename Protocol<TNIC>::Message msg;
+        typename Protocol<TNIC>::Endpoint from;
+        typename Protocol<TNIC>::Endpoint to;
         ChannelOrigin origin;
-        
-        uint64_t SentTimeStampUs;
         uint64_t ReceiveTimeStampUs;
     };
-
-    /// @brief Use -1 for observe all ports
-    /// @param port 
-    void set_up_port_observer(uint16_t port)
-    {
-        _eth_obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
-        _protocol->attach(_eth_obs);
-
-        _shm_obs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, port);
-        _protocol->attach(_shm_obs);
-    }
 
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
     {
@@ -77,31 +65,52 @@ public:
     if (_log.is_open()) _log.close();
 }
 
-    // Route the send
-    int send(const Endpoint& to, const void* data, size_t len) {
+    void set_up_port_observer(uint16_t port)
+    {
+        _eth_obs = new PortObserverImpl(this, ChannelOrigin::Ethernet, port);
+        _protocol->attach(_eth_obs);
+
+        _shm_obs = new PortObserverImpl(this, ChannelOrigin::SharedMemory, port);
+        _protocol->attach(_shm_obs);
+    }
+
+    // Prepare a message according to protocol
+    int send(const Endpoint& to, int type, const void* data, size_t len) {
         uint64_t send_time = get_microseconds_now();
         uint64_t id = _next_msg_id.fetch_add(1);
-        uint16_t my_port = _local.port;
         uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
-        uint16_t vm_to_id = to.mac.addr[5];
+        uint8_t group_id = _protocol->get_current_group_id();
 
-        // Log the send info
-        //logf("[SEND VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, my_port, send_time, id);
-        logf("[SEND VM=%d PORT=%d T=%lu ID=%ld TO=%d]\n", vm_id, my_port, send_time, id, vm_to_id);
+        // Construct Protocol::Message
+        typename ProtocolT::Message msg;
+        msg.group_id = group_id;
+        msg.orig_vm = vm_id;
+        msg.orig_port = _local.port;
+        msg.timestamp = send_time;
+        msg.type = type;
+        msg.msg_id = id;
+        msg.body = std::string(reinterpret_cast<const char*>(data), len);
 
-        // Prepend headers to payload so receiver can extract info
-        std::string payload =
-            "TS=" + std::to_string(send_time) + " " +
-            "VM=" + std::to_string(vm_id) + " " +
-            "PORT=" + std::to_string(my_port) + " " +
-            "ID=" + std::to_string(id) + " " +
-            std::string(reinterpret_cast<const char*>(data), len);
+        // Serialize using Protocol::build_message
+        std::string payload = _protocol->build_message(msg);
+
+        // Log send
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
 
-    int send(const Endpoint& to, const std::string& s) {
-        return send(to, s.data(), s.size());
+    int send(const Endpoint& to, int type, const std::string& s) {
+        return send(to, type, s.data(), s.size());
+    }
+
+    // send a full Protocol::Message (preserves msg_id, timestamp, type, body)
+    int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
+        std::string payload = _protocol->build_message(msg);
+        
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
+
+        return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
 
     Rx receive() {
@@ -129,52 +138,53 @@ private:
         uint16_t port() const override { return _port; }
 
         void on_packet(const Endpoint& from, const Endpoint& to, const uint8_t* data, unsigned len, ChannelOrigin origin_of_packet) override {
-
-            // Filter by observer's expected origin
             if (this->origin != origin_of_packet) return;
 
             uint64_t recv_time = get_microseconds_now();
-            std::string msg(reinterpret_cast<const char*>(data), len);
 
-            // Extract timestamp, vm number, port and message id
-            uint64_t timestamp = -1;
-            int vm_id = -1;
-            int src_port = -1;
-            long id = -1;
+            // Copy raw payload to vector
+            std::vector<uint8_t> raw(data, data + len);
 
-            auto parse_field = [&](const std::string& prefix, auto& out) {
-                if (msg.rfind(prefix, 0) == 0) {
-                    size_t space_pos = msg.find(' ');
-                    if (space_pos != std::string::npos) {
-                        out = std::stoll(msg.substr(prefix.size(), space_pos - prefix.size()));
-                        msg = msg.substr(space_pos + 1); // strip the field
-                    }
-                }
-            };
+            // Parse Protocol::Message
+            typename Protocol<TNIC>::Message msg = _owner->_protocol->parse_message(raw);
 
-            // Parse known fields in order
-            parse_field("TS=", timestamp);
-            parse_field("VM=", vm_id);
-            parse_field("PORT=", src_port);
-            parse_field("ID=", id);
-            
-            // Deliver message
+            // Clean up nulls and whitespace in body
+            msg.body.erase(msg.body.begin(), std::find_if(msg.body.begin(), msg.body.end(), [](unsigned char ch){ return !std::isspace(ch); }));
+            msg.body.erase(std::find_if(msg.body.rbegin(), msg.body.rend(), [](unsigned char ch){ return !std::isspace(ch); }).base(), msg.body.end());
+
+            // Extract metadata for logging
+            int group_id = msg.group_id;
+            int vm_id = msg.orig_vm;
+            int src_port = msg.orig_port;
+            int type = msg.type;
+            uint64_t id = msg.msg_id;
+
+            _owner->logf("[RECV GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, src_port, recv_time, type, id);
+
+            // Deliver to Rx
             Communicator::Rx rx;
+            rx.msg = msg;
             rx.from = from;
             rx.to = to;
-            rx.payload.assign(data, data+len);
             rx.origin = origin_of_packet;
+            rx.ReceiveTimeStampUs = recv_time;
 
-            rx.SentTimeStampUs = timestamp;
-            rx.ReceiveTimeStampUs = get_microseconds_now();
+            Communicator::Rx rx_copy = rx;     // copy before moving
+            _owner->enqueue(std::move(rx));    // queue consumes the original
+            _owner->notify(rx_copy, _port, origin_of_packet); // observers get a copy
+        }
 
-            // Log
-            _owner->logf("[RECV VM=%d PORT=%d T=%lu ID=%ld]\n", vm_id, src_port, recv_time, id);
-            //_owner->logf("[LATENCY t=%ld]\n", recv_time - timestamp);
-            
-            _owner->enqueue(std::move(rx));
-            //printf("[DEBUG] Communicator enqueueing message from [%d] origin\n", static_cast<int>(origin_of_packet));
-            _owner->notify(rx, _port, origin_of_packet);
+        void on_control(typename Protocol<TNIC>::ControlType type, const Endpoint& from, const Endpoint& to) override {
+            switch(type) {
+                case Protocol<TNIC>::ControlType::READY:
+                    break;
+                case Protocol<TNIC>::ControlType::GO:
+                    if (_owner->_on_sync_done) {_owner->_on_sync_done();}
+                    break;
+                default:
+                    // ignore other control messages
+                    break;
+            }
         }
 
     private:
@@ -196,16 +206,6 @@ private:
         }
     }
 
-    void logf(const char* fmt, uint64_t t, uint64_t id) {
-        char buf[256];
-        snprintf(buf, sizeof(buf), fmt, t, id);
-        std::string line(buf);
-        // print to screen (optional)
-        //printf("%s\n", line.c_str());
-        // also write to file
-        log_line(line);
-    }
-
     template<typename... Args>
     void logf(const char* fmt, Args... args) {
         char buf[256];
@@ -213,14 +213,29 @@ private:
         std::string line(buf);
         // print to screen (optional)
         //printf("%s\n", line.c_str());
-        // also write to file
+        // write to log file
         if (_log.is_open()) {
             _log << line << "\n";
             _log.flush();
         }
     }
 
+private:
+    Observed<Rx, uint16_t> observed_;
+    Rx scratch_;
+    std::atomic<uint64_t> _next_msg_id{0};
+    std::ofstream _log;
+    std::function<void()> _on_sync_done;
+
 public:
+    void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
+    void detach(Observer<Rx, uint16_t>* o)  { observed_.detach(o);  }
+    void notify(const Rx& rx, uint16_t port, ChannelOrigin origin) {
+        Rx copy = rx;  // make a local copy
+        observed_.notify(port, &copy, origin);
+    }
+    void set_on_sync_done(std::function<void()> cb) { _on_sync_done = std::move(cb); }
+
     ProtocolT* _protocol{nullptr};
     Endpoint   _local{};
     PortObserverImpl* _eth_obs{nullptr};
@@ -230,20 +245,4 @@ public:
     std::mutex              _log_mtx;
     std::condition_variable _cv;
     std::queue<Rx>          _queue;
-
-private:
-    Observed<Rx, uint16_t> observed_;
-    Rx scratch_;
-    std::atomic<uint64_t> _next_msg_id{0};
-    std::ofstream _log;
-
-public:
-
-    void attach(Observer<Rx, uint16_t>* o)  { observed_.attach(o);  }
-    void detach(Observer<Rx, uint16_t>* o)  { observed_.detach(o);  }
-    void notify(const Rx& rx, uint16_t port, ChannelOrigin origin) {
-        Rx copy = rx;  // make a local copy
-        observed_.notify(port, &copy, origin);
-    }
-
 };

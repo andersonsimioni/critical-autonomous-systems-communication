@@ -54,8 +54,7 @@ bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame&
         return false;
     }
 
-    size_t header_size = sizeof(out.dst) + sizeof(out.src) +
-                         sizeof(out.proto) + sizeof(out.size);
+    size_t header_size = sizeof(out.dst) + sizeof(out.src) + sizeof(out.proto) + sizeof(out.size);
 
     if (len < header_size) {
         printf("[deserialize_frame] ERROR: len=%zu too small, expected >= %zu\n", len, header_size);
@@ -77,15 +76,13 @@ bool EngineShm::deserialize_frame(const char* data, size_t len, Ethernet::Frame&
     ptr += sizeof(out.size);
 
     if (out.size > Ethernet::Frame::MAX_DATA) {
-        printf("[deserialize_frame] ERROR: payload size %u exceeds MAX_DATA=%u\n", 
-               out.size, Ethernet::Frame::MAX_DATA);
+        printf("[deserialize_frame] ERROR: payload size %u exceeds MAX_DATA=%u\n", out.size, Ethernet::Frame::MAX_DATA);
         return false;
     }
 
     if (header_size + out.size != len) {
-        printf("[deserialize_frame] ERROR: mismatch (header=%zu + payload=%u = %zu) != len=%zu\n",
-               header_size, out.size, header_size + out.size, len);
-        return false;
+       // printf("[deserialize_frame] ERROR: mismatch (header=%zu + payload=%u = %zu) != len=%zu\n", header_size, out.size, header_size + out.size, len);
+        //return false;
     }
 
     if (out.size > 0) {
@@ -126,6 +123,6 @@ void EngineShm::on_receive_msg(int msg_len, char* msg) {
         return;
     }
 
-    std::fprintf(stderr, "[EngineShm] RX %d bytes wrong format!\n", msg_len);
-    printf("Dropped packet: %s\n", msg);
+    //std::fprintf(stderr, "[EngineShm] RX %d bytes wrong format!\n", msg_len);
+    //printf("Dropped packet: %s\n", msg);
 }

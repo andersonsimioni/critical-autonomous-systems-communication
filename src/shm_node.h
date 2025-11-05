@@ -12,7 +12,7 @@
 #define MAX_NODES 100
 
 // ring buffer
-#define MAX_MESSAGES 16
+//#define MAX_MESSAGES 16
 
 struct Message {
     int len;
@@ -35,14 +35,14 @@ typedef struct {
     unsigned int msg_len;
 
     // ring buffer
-    Message messages[MAX_MESSAGES];
-    size_t head;  // next position to write
-    size_t tail;  // next position to read
-    bool full;
+    //Message messages[MAX_MESSAGES];
+    //size_t head;  // next position to write
+    //size_t tail;  // next position to read
+    //bool full;
 
     // semaphores for producer/consumer
-    sem_t sem_empty; // counts free slots
-    sem_t sem_full;  // counts occupied slots
+    //sem_t sem_empty; // counts free slots
+    //sem_t sem_full;  // counts occupied slots
 
     pthread_barrier_t all_read_done_barrier;
 } SharedData;

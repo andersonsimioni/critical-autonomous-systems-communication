@@ -10,7 +10,7 @@ KERNEL="bzImage"
 INITRD="initramfs.cpio"
 MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
-NUM_VMS=5
+NUM_VMS=6
 
 # Default timeout in seconds (0 = no timeout). Can be overridden by first numeric arg.
 TIMEOUT=0
@@ -72,23 +72,33 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     VM_LOGDIR="$LOGDIR/vm_$i"
     mkdir -p "$VM_LOGDIR"
 
+    PCAP_FILE="$VM_LOGDIR/netdump_vm${i}.pcap"
+    echo "[INFO] Starting VM $i (MAC=$MAC) → $PCAP_FILE"
+
+    # number of car VMs (VMs 1..N)
+    TOTAL_CARS=$((NUM_VMS - 1))
+
     # Build qemu command arguments into an array for safer handling
     QEMU_CMD=(qemu-system-x86_64
         -m 1024
+        -rtc base=localtime,clock=host
         -kernel "$KERNEL"
         -initrd "$INITRD"
-        -append "console=ttyS0 rdinit=/init"
+        -append "console=ttyS0 rdinit=/init root=/dev/ram0 rw init=/bin/sh vm_id=$i total_sync_vms=$TOTAL_CARS"
         -nographic
         -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare
         -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT
-        -device e1000,netdev=vlan0,mac=$MAC)
+        -device e1000,netdev=vlan0,mac=$MAC
+        -object filter-dump,id=f1,netdev=vlan0,file="$PCAP_FILE")
 
     if [ -z "$TERM_CMD" ]; then
-        "${QEMU_CMD[@]}" &
+        # No terminal, run directly
+        sudo "${QEMU_CMD[@]}" &
         pid=$!
     else
-        # Start qemu inside a new terminal; the PID we get is the terminal emulator process
-        $TERM_CMD "${QEMU_CMD[@]}" &
+        # Start qemu inside a new terminal window
+        TERM_CMD_ARRAY=($TERM_CMD)
+        "${TERM_CMD_ARRAY[@]}" sudo "${QEMU_CMD[@]}" &
         pid=$!
     fi
 
