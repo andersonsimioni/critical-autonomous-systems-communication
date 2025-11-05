@@ -93,12 +93,12 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
 
     if [ -z "$TERM_CMD" ]; then
         # No terminal, run directly
-        sudo "${QEMU_CMD[@]}" &
+        "${QEMU_CMD[@]}" &
         pid=$!
     else
         # Start qemu inside a new terminal window
         TERM_CMD_ARRAY=($TERM_CMD)
-        "${TERM_CMD_ARRAY[@]}" sudo "${QEMU_CMD[@]}" &
+        "${TERM_CMD_ARRAY[@]}" "${QEMU_CMD[@]}" &
         pid=$!
     fi
 

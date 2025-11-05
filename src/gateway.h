@@ -67,7 +67,7 @@ public:
 
 protected:
     bool wants_tick() override { return true; }
-    unsigned tick_period_ms() override { return 1000; }
+    unsigned tick_period_ms() override { return 10; } // 10 miliseconds in order to send enough sync messages
 
     void on_receive(const Rx& rx, ChannelOrigin origin) override
     {
@@ -101,7 +101,7 @@ protected:
 
                     Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
                     //printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
-                    //_protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
                 
 
