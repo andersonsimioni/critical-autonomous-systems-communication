@@ -91,11 +91,26 @@ public:
         msg.msg_id = id;
         msg.body = std::string(reinterpret_cast<const char*>(data), len);
 
+
+        size_t total_size =
+                sizeof(msg.group_id) +
+                sizeof(msg.orig_vm) +
+                sizeof(msg.orig_port) +
+                sizeof(msg.timestamp) +
+                sizeof(msg.type) +
+                sizeof(msg.msg_id) +
+                msg.body.size() +          
+                sizeof(msg.control);       
+
+
+
         // Serialize using Protocol::build_message
         std::string payload = _protocol->build_message(msg);
 
+
+
         // Log send
-        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
+        logf("[SEND sizetotal = %zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, vm_id, _local.port, send_time, type, id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
@@ -107,8 +122,20 @@ public:
     // send a full Protocol::Message (preserves msg_id, timestamp, type, body)
     int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
         std::string payload = _protocol->build_message(msg);
+
+        size_t total_size =
+            sizeof(msg.group_id) +
+            sizeof(msg.orig_vm) +
+            sizeof(msg.orig_port) +
+            sizeof(msg.timestamp) +
+            sizeof(msg.type) +
+            sizeof(msg.msg_id) +
+            msg.body.size() +          
+            sizeof(msg.control);       
+
+
         
-        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
+        logf("[SEND sizetotal=%zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
@@ -159,7 +186,19 @@ private:
             int type = msg.type;
             uint64_t id = msg.msg_id;
 
-            _owner->logf("[RECV GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, src_port, recv_time, type, id);
+            size_t total_size =
+                sizeof(msg.group_id) +
+                sizeof(msg.orig_vm) +
+                sizeof(msg.orig_port) +
+                sizeof(msg.timestamp) +
+                sizeof(msg.type) +
+                sizeof(msg.msg_id) +
+                msg.body.size() +          
+                sizeof(msg.control);       
+
+
+
+            _owner->logf("[RECV sizetotal=%zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, vm_id, src_port, recv_time, type, id);
 
             // Deliver to Rx
             Communicator::Rx rx;
