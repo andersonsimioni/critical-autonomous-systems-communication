@@ -81,10 +81,9 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     # Build qemu command arguments into an array for safer handling
     QEMU_CMD=(qemu-system-x86_64
         -m 1024
-        -rtc base=localtime,clock=host
         -kernel "$KERNEL"
         -initrd "$INITRD"
-        -append "console=ttyS0 rdinit=/init root=/dev/ram0 rw init=/bin/sh vm_id=$i total_sync_vms=$TOTAL_CARS"
+        -append "console=ttyS0 rdinit=/init vm_id=$i total_sync_vms=$TOTAL_CARS"
         -nographic
         -virtfs local,id=logs_dev,path="$VM_LOGDIR",security_model=none,mount_tag=hostshare
         -netdev socket,id=vlan0,mcast=$MCAST_ADDR:$MCAST_PORT
