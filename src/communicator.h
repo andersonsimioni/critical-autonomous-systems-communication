@@ -92,25 +92,14 @@ public:
         msg.body = std::string(reinterpret_cast<const char*>(data), len);
 
 
-        size_t total_size =
-                sizeof(msg.group_id) +
-                sizeof(msg.orig_vm) +
-                sizeof(msg.orig_port) +
-                sizeof(msg.timestamp) +
-                sizeof(msg.type) +
-                sizeof(msg.msg_id) +
-                msg.body.size() +          
-                sizeof(msg.control);       
-
-
-
         // Serialize using Protocol::build_message
         std::string payload = _protocol->build_message(msg);
 
-
+        unsigned size = static_cast<unsigned>(payload.size());
 
         // Log send
-        logf("[SEND sizetotal = %zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, vm_id, _local.port, send_time, type, id);
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
+        logf("[SEND total_size = %u]", size);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
@@ -186,19 +175,8 @@ private:
             int type = msg.type;
             uint64_t id = msg.msg_id;
 
-            size_t total_size =
-                sizeof(msg.group_id) +
-                sizeof(msg.orig_vm) +
-                sizeof(msg.orig_port) +
-                sizeof(msg.timestamp) +
-                sizeof(msg.type) +
-                sizeof(msg.msg_id) +
-                msg.body.size() +          
-                sizeof(msg.control);       
 
-
-
-            _owner->logf("[RECV sizetotal=%zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, vm_id, src_port, recv_time, type, id);
+            _owner->logf("[RECV GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, src_port, recv_time, type, id);
 
             // Deliver to Rx
             Communicator::Rx rx;
