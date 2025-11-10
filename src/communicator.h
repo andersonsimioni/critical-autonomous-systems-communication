@@ -124,7 +124,7 @@ public:
 
 
         
-        logf("[SEND sizetotal=%zu VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", total_size, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
+        logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
