@@ -24,6 +24,7 @@ void Car::start(int vm_id, int total_sync_vms)
 
     // Determine VM identity
     bool is_sync_master = (vm_id == 0); // VM 0 is the road-side equipment (gateway only)
+    if (is_sync_master) components_len = 0; // VM 0 has no car components
 
     // Create the gateway for all VMs
     Gateway<NIC>* gateway = new Gateway<NIC>(GATEWAY_PORT, vm_id, total_sync_vms, is_sync_master);
