@@ -225,7 +225,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
 
     this->using_bus = true;
 
-    //printf("writing message..\n");
+    printf("writing message..\n");
 
     memset(this->shared_data_ptr->bus, 0, PAYLOAD);
 
@@ -233,7 +233,7 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
 
     this->shared_data_ptr->msg_len = msg_len;
 
-    //printf("broadcasting new message signal..\n");
+    printf("broadcasting new message signal..\n");
 
 
     pthread_mutex_lock(&this->shared_data_ptr->new_msg_cond_mtx);
@@ -246,13 +246,12 @@ bool ShmNode::send_msg(int msg_len, const char* msg)
 
     pthread_mutex_unlock(&this->shared_data_ptr->new_msg_cond_mtx);
 
-    //printf("waiting for all read done barrier..\n");
+    printf("waiting for all read done barrier..\n");
 
     pthread_barrier_wait(&this->shared_data_ptr->all_read_done_barrier);
 
-    //printf("all nodes read the message\n");
-
-    //printf("setting msg_available = false\n");
+    printf("all nodes read the message\n");
+    printf("setting msg_available = false\n");
 
     pthread_mutex_lock(&this->shared_data_ptr->new_msg_cond_mtx);
 

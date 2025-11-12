@@ -187,13 +187,21 @@ public:
         auto fwd_msg = rx.msg;
         fwd_msg.orig_vm   = _local.mac.addr[5];
         fwd_msg.orig_port = _port;
+        uint64_t send_time = get_microseconds_now();
+        fwd_msg.timestamp = send_time;
         _comm->send_message(_to_bcast, fwd_msg);
     }
 
     void fanout_message(const Rx& rx) {
+        auto fwd_msg = rx.msg;
+        fwd_msg.orig_vm   = _local.mac.addr[5];
+        fwd_msg.orig_port = _port;
+        uint64_t send_time = -1;
         for (auto port : _peer_ports) {
             Protocol<NIC>::Endpoint dst { _my_mac, port };
-            _comm->send_message(dst, rx.msg);
+            send_time = get_microseconds_now();
+            fwd_msg.timestamp = send_time;
+            _comm->send_message(dst, fwd_msg);
         }
     }
 

@@ -34,7 +34,6 @@ public:
         typename Protocol<TNIC>::Endpoint from;
         typename Protocol<TNIC>::Endpoint to;
         ChannelOrigin origin;
-        uint64_t ReceiveTimeStampUs;
     };
 
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
@@ -184,7 +183,6 @@ private:
             rx.from = from;
             rx.to = to;
             rx.origin = origin_of_packet;
-            rx.ReceiveTimeStampUs = recv_time;
 
             Communicator::Rx rx_copy = rx;     // copy before moving
             _owner->enqueue(std::move(rx));    // queue consumes the original
