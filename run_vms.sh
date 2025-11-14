@@ -73,7 +73,7 @@ for i in $(seq 0 $((NUM_VMS - 1))); do
     mkdir -p "$VM_LOGDIR"
 
     PCAP_FILE="$VM_LOGDIR/netdump_vm${i}.pcap"
-    echo "[INFO] Starting VM $i (MAC=$MAC) → $PCAP_FILE"
+    # echo "[INFO] Starting VM $i (MAC=$MAC) → $PCAP_FILE"
 
     # number of car VMs (VMs 1..N)
     TOTAL_CARS=$((NUM_VMS - 1))

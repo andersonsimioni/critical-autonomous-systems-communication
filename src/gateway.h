@@ -85,10 +85,7 @@ protected:
 
     void on_tick() override {
 
-        // ENTREGA P4
         std::string msg = "PING";
-
-        /* ESSE COMENTARIO DESATIVA A SINCRONIZACAO TEMPORAL - DEBUG
 
         uint64_t now_us = get_microseconds_now(); // wall-clock timestamp in microseconds
 
@@ -113,7 +110,7 @@ protected:
 
             }
         }
-        */
+        
     }
 
 private:
