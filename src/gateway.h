@@ -104,7 +104,10 @@ protected:
 
                     Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
                     //printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
-                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
+
+                    // PROVISIORIO
+                    int MsgAC = -1;
+                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ, MsgAC);
                 }
                 
 

@@ -182,7 +182,7 @@ public:
         tv.tv_sec  = static_cast<time_t>(sec);
         tv.tv_usec = static_cast<suseconds_t>(usec);
 
-        printf("\n ---- VAI ALTERAR O RELOGIO ---\n");
+        //printf("\n ---- VAI ALTERAR O RELOGIO ---\n");
         if (settimeofday(&tv, nullptr) != 0) return false;
         //if (clock_settime(CLOCK_REALTIME, (const struct timespec*)&tv) != 0) return false;
 
@@ -250,7 +250,7 @@ public:
    // }
 
 
-     void printStatus() const {
+    void printStatus() const {
         printf("\n ---- Clock Syncer Infos ---\n");
         printf("samples: %zu\n", std::max(rtt_samples.size(), offset_samples.size()));
         printf("avg rtt: %lld us\n", avg_rtt);

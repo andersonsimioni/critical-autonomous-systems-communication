@@ -87,6 +87,7 @@ public:
         uint64_t timestamp;    // Original TIME
         int      type;         // Message type (like component port)
         uint64_t msg_id;       // Original ID
+        int msgAC;
         std::string body;      // Payload body
         ControlType control{ControlType::NONE}; // Control type, default NONE
     };
@@ -100,6 +101,7 @@ public:
             << "TYPE=" << msg.type << " "
             << "ID=" << msg.msg_id << " "
             << "CONTROL=" << static_cast<int>(msg.control) << " "
+            << "MsgAC=" << int(msg.msgAC) << " "
             << msg.body;
         return oss.str();
     }
@@ -159,6 +161,7 @@ public:
         if (auto v = extract_field("TYPE"); !v.empty()) msg.type = std::stoi(v);
         if (auto v = extract_field("ID"); !v.empty()) msg.msg_id = std::stoull(v);
         if (auto v = extract_field("CONTROL"); !v.empty()) msg.control = static_cast<ControlType>(std::stoi(v));
+        if (auto v = extract_field("MsgAC"); !v.empty()) msg.msgAC = std::stoull(v);
 
         if (pos < s.size()) {
             msg.body = s.substr(pos, s.size() - pos); // safe even if pos == s.size()
@@ -187,9 +190,10 @@ public:
     }
 
     // Send control message
-    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, const std::string& payload = {}) {
+    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, int MsgAC = 0, const std::string& payload = {}) {
         Message msg;
         msg.control = type;   // explicit control type
+        msg.msgAC = MsgAC;    // optinal message auth control 
         msg.body = payload;   // optional extra data
 
         // Serialize message
@@ -341,14 +345,7 @@ public:
             }
         }
 
-
-
-
-
-
-
         // SYNC CLOCKS PROTOCOL:
-
 
         else if(ctrl == ControlType::SYNC_REQ) {
             if(_is_master) {
@@ -358,8 +355,11 @@ public:
                 char buf[128];
                 snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
+                // PROVISORIO
+                int MsgAC = -4;
+
                 // Send SYNC_RESP with timestamp t1
-                send_control(_control_local, c.from, ControlType::SYNC_RESP, buf);
+                send_control(_control_local, c.from, ControlType::SYNC_RESP, MsgAC, buf);
 
                 //printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
             }
@@ -376,7 +376,9 @@ public:
             char buf[256];
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
-            send_control(_control_local, c.from, ControlType::DELAY_REQ, buf);
+            // PROVISORIO
+            int MsgAC = -2;
+            send_control(_control_local, c.from, ControlType::DELAY_REQ, MsgAC, buf);
 
             //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
         }
@@ -395,7 +397,9 @@ public:
             char buf[128];
             snprintf(buf, sizeof(buf), "%lld %lld", (long long)offset, (long long)rtt);
 
-            send_control(_control_local, c.from, ControlType::DELAY_RESP, buf);
+            // PROVISORIO
+            int MsgAC = -3;
+            send_control(_control_local, c.from, ControlType::DELAY_RESP, MsgAC, buf);
 
             //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
         }
@@ -431,21 +435,6 @@ public:
 
             //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         else if (ctrl == ControlType::MOVE_GROUP) {
             int new_gid = std::stoi(msg.body.substr(strlen("MOVE_GROUP")));
