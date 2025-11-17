@@ -78,7 +78,7 @@ public:
         uint64_t send_time = get_microseconds_now();
         uint64_t id = _next_msg_id.fetch_add(1);
         uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
-        uint8_t group_id = _protocol->get_current_group_id();
+        uint8_t group_id = _protocol->get_current_group();
 
         // Construct Protocol::Message
         typename ProtocolT::Message msg;
@@ -111,17 +111,15 @@ public:
     int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
         std::string payload = _protocol->build_message(msg);
 
-        size_t total_size =
-            sizeof(msg.group_id) +
-            sizeof(msg.orig_vm) +
-            sizeof(msg.orig_port) +
-            sizeof(msg.timestamp) +
-            sizeof(msg.type) +
-            sizeof(msg.msg_id) +
-            msg.body.size() +          
-            sizeof(msg.control);       
-
-
+        // size_t total_size =
+        //     sizeof(msg.group_id) +
+        //     sizeof(msg.orig_vm) +
+        //     sizeof(msg.orig_port) +
+        //     sizeof(msg.timestamp) +
+        //     sizeof(msg.type) +
+        //     sizeof(msg.msg_id) +
+        //     msg.body.size() +          
+        //     sizeof(msg.control);       
         
         logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 
