@@ -59,6 +59,13 @@ public:
         //printf("[CAR COMPONENT][%s] initialized! Ready to start\n", this->name().c_str());
     }
 
+    void set_group_id(int gid) {
+        _group_id = gid;
+        if (_protocol) {
+            _protocol->set_current_group(gid);
+        }
+    }
+
     // Called by Communicator when GO arrives
     void notify_sync_done() {
         _sync_done.store(true);
@@ -110,8 +117,6 @@ protected:
 
                     _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
-                
-
             }
         }
         
@@ -119,6 +124,7 @@ protected:
 
 private:
     uint16_t _port;
+    int _group_id = -1;                                     // VM group 
     int _vm_id;                                             // VM identity
     int _total_sync_vms;                                    // number of VMs to wait for at the barrier
     bool _sync_master;                                      // true if this Gateway coordinates READY/GO and SYNC

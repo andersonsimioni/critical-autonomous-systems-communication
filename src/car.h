@@ -15,7 +15,7 @@ public:
     Car();
     ~Car();
 
-    void start(int vm_id, int total_sync_vms);
+    void start(int vm_id, int group_id, int total_sync_vms);
 };
 
 

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <list>
 #include <vector>
 #include <set>
@@ -10,6 +11,7 @@
 #include <functional>
 #include <unordered_map>
 #include <optional>
+#include <mutex>
 #include <iostream>
 
 #include "observer.h"
@@ -81,8 +83,9 @@ public:
         SYNC_RESP,
         DELAY_REQ,
         DELAY_RESP,
-        MOVE_GROUP,
-        GROUP_INFO,
+        GROUP_MOVE,
+        GROUP_MOVE_NOTIFY,
+        GROUP_ASSIGN
     };
 
     struct Message {
@@ -177,6 +180,28 @@ public:
         return msg;
     }
 
+    // Helper to get the group of a VM from its mac address
+    std::optional<int> get_group_of(int vm_id) const {
+        std::lock_guard<std::mutex> lk(groups_mtx);
+        for (auto& [gid, info] : _groups) {
+            if (info.members.count(vm_id)) return gid;
+        }
+        return std::nullopt;
+    }
+
+    // Helper to extract VM id from a MAC address (assumes last octet encodes vm id)
+    static inline int vm_id_from_mac(const Address &mac) {
+        return static_cast<int>(mac.addr[5]); // assume Address has a public array 'addr' of 6 bytes like uint8_t addr[6];
+    }
+
+    // Helper to build a MAC address string "00:00:00:00:00:XX" for given vm_id, then make Endpoint
+    Endpoint endpoint_from_vm(int vm_id, Port port) const {
+        if (vm_id < 0 || vm_id > 255) throw std::runtime_error("vm_id out of range");
+        char buf[32]; // vm_id must fit in a byte (0..255), format as hex two-digit
+        snprintf(buf, sizeof(buf), "00:00:00:00:00:%02x", vm_id & 0xFF);
+        return Endpoint(Address::from_string(std::string(buf)), port);
+    }
+
     uint8_t generate_mac(const char* buf) {
         uint8_t mac = 0;
         size_t len = strlen(buf);
@@ -206,11 +231,15 @@ public:
     }
 
     // Send control message
-    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, uint8_t msgac = 0, const std::string& payload = {}) {
+    int send_control(const Endpoint& from, const Endpoint& to, ControlType ctype, uint8_t msgac = 0, const std::string& payload = {}) {
         Message msg;
-        msg.control = type;   // explicit control type
-        msg.msgac = msgac;    // optinal message auth control 
-        msg.body = payload;   // optional extra data
+        msg.control = ctype;                                            // explicit control type
+        msg.msgac = msgac;                                              // message auth control
+        msg.group_id = static_cast<uint8_t>(current_group_id);          // metadata so receivers can reason about group/origin
+        msg.orig_vm = static_cast<uint8_t>(vm_id_from_mac(from.mac));   // extract vm_id from MAC address
+        msg.orig_port = from.port;
+        msg.timestamp = get_microseconds_now();
+        msg.body = payload;                                             // extra data
 
         // Serialize message
         std::string serialized = build_message(msg);
@@ -220,7 +249,25 @@ public:
 
     int get_current_group_id() const { return current_group_id; }
 
-    std::set<std::string> group_members(int gid) const {
+    void set_current_group(int gid) {
+        {
+            std::lock_guard<std::mutex> lk(groups_mtx);
+            current_group_id = gid;
+
+            // Register local VM in the group's member list so lookups succeed.
+            try {
+                int my_vm = vm_id_from_mac(nic->address());
+                _groups[gid].group_id = gid;             // ensure group struct exists
+                _groups[gid].members.insert(my_vm);      // insert local VM id
+            } catch(...) {
+                // shouldn't happen, but be safe
+            }
+        }
+        printf("[DEBUG] Group id set to %d (registered local vm)\n", current_group_id);
+    }
+
+    std::set<int> group_members(int gid) const {
+        std::lock_guard<std::mutex> lk(groups_mtx);
         if (auto it = _groups.find(gid); it != _groups.end())
             return it->second.members;
         return {};
@@ -235,7 +282,7 @@ public:
     }
 
     void move_group(int new_gid) {send_control(_control_local, Endpoint(Ethernet::Address::BROADCAST(), _control_local.port),
-        ControlType::MOVE_GROUP, std::to_string(new_gid));}
+        ControlType::GROUP_MOVE, std::to_string(new_gid));}
 
     // Enable sync barrier with a callback
     void enable_start_sync(int total_vms, const Endpoint& local, std::function<void()> cb = {}) {
@@ -369,7 +416,7 @@ public:
                 uint64_t t1 = get_microseconds_now();  // master current time
 
                 char buf[128];
-                snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
+                snprintf(buf, sizeof(buf), "%lu", (unsigned long)t1);
 
                 // PROVISORIO
                 uint8_t msgac = generate_mac(buf);
@@ -384,13 +431,13 @@ public:
         else if(ctrl == ControlType::SYNC_RESP && !_is_master) {
             // Worker received SYNC from master
             uint64_t t1 = 0;
-            if(!msg.body.empty()) sscanf(msg.body.c_str(), "%llu", (unsigned long long*)&t1);
+            if(!msg.body.empty()) sscanf(msg.body.c_str(), "%lu", (unsigned long*)&t1);
 
             uint64_t t2 = get_microseconds_now(); // worker receive time
-            uint64_t t3 = get_microseconds_now(); // worker send time (DELAY_REQ)
+            uint64_t t3 = t2; // worker send time, the same for now
 
             char buf[256];
-            snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
+            snprintf(buf, sizeof(buf), "%lu %lu %lu", (unsigned long)t1, (unsigned long)t2, (unsigned long)t3);
 
             // PROVISORIO
             uint8_t msgac = generate_mac(buf);
@@ -402,7 +449,7 @@ public:
 
         else if(ctrl == ControlType::DELAY_REQ && _is_master) {
             uint64_t t1, t2, t3;
-            if(sscanf(msg.body.c_str(), "%llu %llu %llu", (unsigned long long*)&t1, (unsigned long long*)&t2, (unsigned long long*)&t3) != 3) return;
+            if(sscanf(msg.body.c_str(), "%lu %lu %lu", (unsigned long*)&t1, (unsigned long*)&t2, (unsigned long*)&t3) != 3) return;
 
             uint64_t t4 = get_microseconds_now(); // master receive time
 
@@ -412,7 +459,7 @@ public:
 
             // Send DELAY_RESP with offset & rtt
             char buf[128];
-            snprintf(buf, sizeof(buf), "%lld %lld", (long long)offset, (long long)rtt);
+            snprintf(buf, sizeof(buf), "%ld %ld", (long)offset, (long)rtt);
 
             // PROVISORIO
             uint8_t msgac = generate_mac(buf);
@@ -427,7 +474,7 @@ public:
             int64_t delay = 0;
             
             sscanf(msg.body.c_str(), "%lld %lld", (long long*)&offset, (long long*)&delay);
-            printf("Clock Syncer Collecting Sample offset=%lld delay=%lld, adding samples\n", offset, delay);
+            printf("Clock Syncer Collecting Sample offset=%ld delay=%ld, adding samples\n", offset, delay);
 
             _clock_syncer->addPtpSample(offset, delay);
             printf("samples added!\n");
@@ -454,26 +501,107 @@ public:
             //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
         }
 
-        else if (ctrl == ControlType::MOVE_GROUP) {
-            int new_gid = std::stoi(msg.body.substr(strlen("MOVE_GROUP")));
-            // remove from old group
-            for (auto &[gid, info] : _groups)
-                info.members.erase(c.from.mac.str());
-            _groups[new_gid].members.insert(c.from.mac.str());
-            printf("[GROUP] VM %s moved to group %d\n", c.from.mac.str().c_str(), new_gid);
+        else if (ctrl == ControlType::GROUP_MOVE) {
+            int requester_id = static_cast<int>(msg.orig_vm); // VM that wants to move
+            int requested_gid = -1;
+            try {
+                requested_gid = std::stoi(msg.body); // desired target group
+            } catch(...) {
+                printf("[GROUP] Bad GROUP_MOVE body from %d: '%s'\n", requester_id, msg.body.c_str());
+                return;
+            }
+
+            auto sender_gid = get_group_of(requester_id);
+            if (!sender_gid) {
+                printf("[GROUP] MOVE: requester %d not in any group\n", requester_id);
+                return;
+            }
+
+            // Remove from old group (thread-safe)
+            {
+                std::lock_guard<std::mutex> lk(groups_mtx);
+                _groups[*sender_gid].members.erase(requester_id);
+            }
+
+            // Find coordinator (master_mac) for requested_gid and notify it.
+            auto it = _groups.find(requested_gid);
+            if (it != _groups.end() && !it->second.master_mac.empty()) {
+                Endpoint coord_ep(Address::from_string(it->second.master_mac), _control_local.port);
+                std::string body = std::to_string(requester_id) + "|" + std::to_string(requested_gid); // body = requester_id|requested_gid
+                send_control(_control_local, coord_ep, ControlType::GROUP_MOVE_NOTIFY, 0, body);
+                printf("[GROUP] Forwarded move: VM %d -> group %d\n", requester_id, requested_gid);
+            }
         }
 
-        else if (ctrl == ControlType::GROUP_INFO) {
-            printf("[GROUP] Info received from %s: %s\n",
-                c.from.mac.str().c_str(), msg.body.c_str());
+        else if (ctrl == ControlType::GROUP_MOVE_NOTIFY) {
+
+            int requester_id = -1;
+            int requested_gid = -1;
+
+            auto pos = msg.body.find('|'); // we expect body = "vm_id|gid"
+            if (pos == std::string::npos) {
+                printf("[GROUP] MOVE_NOTIFY malformed body: %s\n", msg.body.c_str());
+                return;
+            }
+
+            try {
+                requester_id = std::stoi(msg.body.substr(0, pos));
+                requested_gid = std::stoi(msg.body.substr(pos + 1));
+            } catch(...) {
+                printf("[GROUP] MOVE_NOTIFY parse error: %s\n", msg.body.c_str());
+                return;
+            }
+
+            if (requested_gid != current_group_id) {
+                printf("[GROUP] MOVE_NOTIFY sent to wrong coordinator! requester=%d wanted group=%d but this is group=%d\n",
+                    requester_id, requested_gid, current_group_id);
+                return;
+            }
+
+            // Insert incoming VM in group list (thread-safe)
+            {
+                std::lock_guard<std::mutex> lk(groups_mtx);
+                _groups[current_group_id].members.insert(requester_id);
+            }
+
+            // Tell VM it is now part of this group
+            Endpoint vm_req = endpoint_from_vm(requester_id, _control_local.port);
+            send_control(_control_local, vm_req, ControlType::GROUP_ASSIGN, 0, std::to_string(current_group_id)); // inform joining VM of the new group
+            printf("[GROUP] Coordinator added VM %d to group %d\n", requester_id, current_group_id);
+        }
+
+        else if (ctrl == ControlType::GROUP_ASSIGN) {
+            int new_gid = -1;
+            try { new_gid = std::stoi(msg.body); } catch(...) { new_gid = -1; }
+            if (new_gid >= 0) {
+                current_group_id = new_gid;
+                printf("[GROUP] This VM (%s) assigned to group %d\n", nic->address().str().c_str(), current_group_id);
+            } else {
+                printf("[GROUP] GROUP_ASSIGN with invalid body: %s\n", msg.body.c_str());
+            }
         }
 
         // Forward to port observers
-        for(auto* po : portObservers_) {
-            if(!po) continue;
-            if(ctrl != ControlType::NONE) {
+        for (auto* po : portObservers_) {
+            if (!po) continue;
+
+            // Control messages always pass
+            if (ctrl != ControlType::NONE) {
                 po->on_control(ctrl, c.from, c.to);
-            } else if(po->port() == c.to.port || po->port() == ANY_PORT) {
+                continue;
+            }
+
+            // Filter data messages by group
+            auto sender_gid = static_cast<int>(msg.group_id);
+            int local_gid = current_group_id;
+
+            if (sender_gid == -1 || sender_gid != local_gid) {
+                printf("Dropped msg from group %d (local %d)\n", sender_gid, local_gid);
+                continue;  // observer is from another group, skip it (drop packet)
+            }
+
+            // Observer is from the same group, deliver only if port matches
+            if (po->port() == c.to.port || po->port() == ANY_PORT) {
                 po->on_packet(c.from, c.to, c.payload.data(), c.length, c.origin);
             }
         }
@@ -488,10 +616,11 @@ public:
 private:
 
     // Group management
+    mutable std::mutex groups_mtx;
     struct GroupInfo {
         int group_id;
-        std::set<std::string> members;  // store MAC addresses (or VM names)
-        std::string master_mac;         // optional
+        std::set<int> members;  // store VM ids
+        std::string master_mac; // optional
     };
 
     int current_group_id{0};
