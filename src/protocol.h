@@ -10,12 +10,17 @@
 #include <functional>
 #include <unordered_map>
 #include <optional>
+#include <iostream>
 
 #include "observer.h"
 #include "frame.h"
 #include "nic.h"
 #include "utils.h"
 #include "clock_syncer.h"
+
+
+static const uint8_t SECRET_KEY[] = { 0x41, 0x23, 0x55, 0x88 }; // chave compartilhada
+static const size_t SECRET_KEY_LEN = sizeof(SECRET_KEY);
 
 // -----------------------------------------------------
 // Simple Protocol layered over NIC with logical ports.
@@ -87,7 +92,7 @@ public:
         uint64_t timestamp;    // Original TIME
         int      type;         // Message type (like component port)
         uint64_t msg_id;       // Original ID
-        int msgAC;
+        uint8_t msgac;             // Message auth code
         std::string body;      // Payload body
         ControlType control{ControlType::NONE}; // Control type, default NONE
     };
@@ -101,13 +106,13 @@ public:
             << "TYPE=" << msg.type << " "
             << "ID=" << msg.msg_id << " "
             << "CONTROL=" << static_cast<int>(msg.control) << " "
-            << "MsgAC=" << int(msg.msgAC) << " "
+            << "MSGAC=" << int(msg.msgac) << " "
             << msg.body;
         return oss.str();
     }
    
     // Observers interested in a specific destination port (async API)
-    class PortObserver {
+class PortObserver {
     public:
         ChannelOrigin origin;  // store the observer’s channel
         PortObserver(ChannelOrigin o) : origin(o) {}
@@ -161,7 +166,7 @@ public:
         if (auto v = extract_field("TYPE"); !v.empty()) msg.type = std::stoi(v);
         if (auto v = extract_field("ID"); !v.empty()) msg.msg_id = std::stoull(v);
         if (auto v = extract_field("CONTROL"); !v.empty()) msg.control = static_cast<ControlType>(std::stoi(v));
-        if (auto v = extract_field("MsgAC"); !v.empty()) msg.msgAC = std::stoull(v);
+        if (auto v = extract_field("MSGAC"); !v.empty()) msg.msgac = std::stoull(v);
 
         if (pos < s.size()) {
             msg.body = s.substr(pos, s.size() - pos); // safe even if pos == s.size()
@@ -170,6 +175,17 @@ public:
         }    
 
         return msg;
+    }
+
+    uint8_t generate_mac(const char* buf) {
+        uint8_t mac = 0;
+        size_t len = strlen(buf);
+
+        uint8_t msgac = 0;
+            for (size_t i = 0; i < len; i++) {
+                msgac ^= buf[i] ^ SECRET_KEY[i % SECRET_KEY_LEN];
+            }
+            return msgac;
     }
 
     // Send data payload from "from" to "to" (broadcast MAC is allowed)
@@ -190,10 +206,10 @@ public:
     }
 
     // Send control message
-    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, int MsgAC = 0, const std::string& payload = {}) {
+    int send_control(const Endpoint& from, const Endpoint& to, ControlType type, uint8_t msgac = 0, const std::string& payload = {}) {
         Message msg;
         msg.control = type;   // explicit control type
-        msg.msgAC = MsgAC;    // optinal message auth control 
+        msg.msgac = msgac;    // optinal message auth control 
         msg.body = payload;   // optional extra data
 
         // Serialize message
@@ -356,10 +372,10 @@ public:
                 snprintf(buf, sizeof(buf), "%llu", (unsigned long long)t1);
 
                 // PROVISORIO
-                int MsgAC = -4;
+                uint8_t msgac = generate_mac(buf);
 
                 // Send SYNC_RESP with timestamp t1
-                send_control(_control_local, c.from, ControlType::SYNC_RESP, MsgAC, buf);
+                send_control(_control_local, c.from, ControlType::SYNC_RESP, msgac, buf);
 
                 //printf("[SYNC] SYNC_REQ received from %s, sending SYNC_RESP with t1=%llu\n", c.from.mac.str().c_str(), (unsigned long long)t1);
             }
@@ -377,8 +393,9 @@ public:
             snprintf(buf, sizeof(buf), "%llu %llu %llu", (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
 
             // PROVISORIO
-            int MsgAC = -2;
-            send_control(_control_local, c.from, ControlType::DELAY_REQ, MsgAC, buf);
+            uint8_t msgac = generate_mac(buf);
+            
+            send_control(_control_local, c.from, ControlType::DELAY_REQ, msgac, buf);
 
             //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
         }
@@ -398,8 +415,9 @@ public:
             snprintf(buf, sizeof(buf), "%lld %lld", (long long)offset, (long long)rtt);
 
             // PROVISORIO
-            int MsgAC = -3;
-            send_control(_control_local, c.from, ControlType::DELAY_RESP, MsgAC, buf);
+            uint8_t msgac = generate_mac(buf);
+
+            send_control(_control_local, c.from, ControlType::DELAY_RESP, msgac, buf);
 
             //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
         }

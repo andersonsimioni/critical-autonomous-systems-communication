@@ -106,8 +106,9 @@ protected:
                     //printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
 
                     // PROVISIORIO
-                    int MsgAC = -1;
-                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ, MsgAC);
+                    //uint8_t msgac = _protocol->generate_mac(buf);
+
+                    _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
                 
 
