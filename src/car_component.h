@@ -216,20 +216,20 @@ public:
         return _comm->send(dst, static_cast<int>(_port), payload.data(), payload.size());
     }
 
-    void forward_message(const Rx& rx) {
+    void forward_message(const Rx& rx, int my_id) {
         auto fwd_msg = rx.msg;
         fwd_msg.group_id  = _protocol->get_current_group();
-        fwd_msg.orig_vm   = _vm_id;
+        fwd_msg.orig_vm   = my_id;
         fwd_msg.orig_port = _port;
         uint64_t send_time = get_microseconds_now();
         fwd_msg.timestamp = send_time;
         _comm->send_message(_to_bcast, fwd_msg);
     }
 
-    void fanout_message(const Rx& rx) {
+    void fanout_message(const Rx& rx, int my_id) {
         auto fwd_msg = rx.msg;
         fwd_msg.group_id  = _protocol->get_current_group();
-        fwd_msg.orig_vm   = _vm_id;
+        fwd_msg.orig_vm   = my_id;
         fwd_msg.orig_port = _port;
         uint64_t send_time = -1;
         for (auto port : _peer_ports) {

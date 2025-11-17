@@ -204,14 +204,21 @@ public:
     }
 
     uint8_t generate_mac(const char* buf) {
-        uint8_t mac = 0;
         size_t len = strlen(buf);
-
         uint8_t msgac = 0;
+
             for (size_t i = 0; i < len; i++) {
                 msgac ^= buf[i] ^ SECRET_KEY[i % SECRET_KEY_LEN];
             }
             return msgac;
+    }
+
+    bool verify_msgac (uint8_t my_msgac, const char* buf ){
+
+        uint8_t expected = generate_mac(buf);
+        printf("[DEBUG AUTH] verify : expected %d and my mac %d \n" , expected, my_msgac);
+        return expected == my_msgac;
+
     }
 
     // Send data payload from "from" to "to" (broadcast MAC is allowed)
@@ -426,6 +433,20 @@ public:
         Message msg = parse_message(c.payload);
         //printf("[DEBUG] Protocol layer received message [%s] from %s\n", msg.body.c_str(), c.from.mac.str().c_str());
 
+        // Determine control type
+        ControlType ctrl = msg.control;
+
+        // Verify message auth code
+        if (ctrl != ControlType::NONE) {
+            bool verify_msgac = this->verify_msgac(msg.msgac, msg.body.c_str());
+            if (!verify_msgac)
+            {
+                printf("[AUTH] Unauthorized control message! \n");
+                return;
+            }
+            else { printf("[AUTH] Authorized control! \n"); }
+        }
+
         // Remove trailing nulls only (if any)
         if (!msg.body.empty()) {
             auto nullpos = msg.body.find('\0');
@@ -441,9 +462,7 @@ public:
         };
         ltrim(msg.body); rtrim(msg.body);
 
-        // Determine control type
-        ControlType ctrl = msg.control;
-
+        
         // Sync logic for READY
         if(ctrl == ControlType::READY && _sync_total_vms > 0) {
             // Track which nodes are ready
@@ -470,6 +489,7 @@ public:
         // SYNC CLOCKS PROTOCOL:
 
         else if(ctrl == ControlType::SYNC_REQ) {
+
             if(_is_master) {
                 // Master received SYNC_REQ from worker
                 uint64_t t1 = get_microseconds_now();  // master current time

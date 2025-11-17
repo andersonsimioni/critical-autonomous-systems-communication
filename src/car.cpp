@@ -31,7 +31,7 @@ void Car::start(int vm_id, int group_id, int total_sync_vms)
     gateway->initialize(true, components_len, group_id);
 
     // Only non-coordinator VMs (cars) fork child processes for other components
-    if(vm_id / 10 != 0)
+    if(!is_sync_master)
     {
         for (int i = 0; i < components_len; i++)
         {

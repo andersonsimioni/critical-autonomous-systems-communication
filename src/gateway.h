@@ -78,11 +78,11 @@ protected:
         
         if(rx.origin == ChannelOrigin::SharedMemory) {
             // Message from a local component: forward to other cars
-            Base::forward_message(rx);
+            Base::forward_message(rx, _vm_id);
         }
         else if(rx.origin == ChannelOrigin::Ethernet) {
             // Message from another car: deliver to local components
-            Base::fanout_message(rx);
+            Base::fanout_message(rx, _vm_id);
         }
     }
 
@@ -128,8 +128,8 @@ protected:
 
 private:
     uint16_t _port;
-    int _group_id = -1;                                     // VM group 
-    int _vm_id;                                             // VM identity
+    int _group_id{0};                                       // VM group 
+    int _vm_id{0};                                          // VM identity
     int _total_sync_vms;                                    // number of VMs to wait for at the barrier
     bool _sync_master;                                      // true if this Gateway coordinates READY/GO and SYNC
     std::atomic<bool> _sync_done;                           // flag for passing the initialization barrier
