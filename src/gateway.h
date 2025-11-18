@@ -93,6 +93,16 @@ protected:
 
         Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // endpoint for group coordinator, only it will respond
 
+        // GROUP MOVE REQUEST - for testing at the moment
+        static bool did_request = false;
+        int new_group = 3;
+        if(_vm_id == 1 && !did_request) {
+            printf("[DEBUG] VM %d requesting to move to group %d.\n", _vm_id, new_group);
+            _protocol->move_group(new_group);
+            did_request = true;
+            printf("[DEBUG] VM %d requested to move to group %d.\n", _vm_id, new_group);
+        } 
+
         // SYNC REQUEST every 3 seconds
         if (!_sync_master) {
             if (now_us - _last_sync_request_us.load() >= 3'000'000ULL) { // 3 seconds
@@ -114,16 +124,7 @@ protected:
                     _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
             }
-        }
-
-        // GROUP MOVE REQUEST - for testing at the moment
-        static bool did_request = false;
-        int new_group = 3;
-        if(_vm_id == 1 && !did_request) {
-            _protocol->move_group(new_group);
-            did_request = true;
-            printf("[DEBUG] VM %d requested to move to group %d.\n", _vm_id, new_group);
-        }       
+        }      
     }
 
 private:
