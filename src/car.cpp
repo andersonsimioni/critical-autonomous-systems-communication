@@ -30,6 +30,13 @@ void Car::start(int vm_id, int group_id, int total_sync_vms)
     Gateway<NIC>* gateway = new Gateway<NIC>(GATEWAY_PORT, vm_id, total_sync_vms, is_sync_master);
     gateway->initialize(true, components_len, group_id);
 
+    // Parent: build a static list of all component ports
+    std::vector<uint16_t> all_ports;
+    for (auto* comp : this->components) all_ports.push_back(comp->port());
+
+    // Assign peer ports to each component (for fanout)
+    for (auto* comp : this->components) comp->set_peer_ports(all_ports);
+
     // Only non-coordinator VMs (cars) fork child processes for other components
     if(!is_sync_master)
     {
@@ -46,15 +53,6 @@ void Car::start(int vm_id, int group_id, int total_sync_vms)
             }
         }
     }
-
-    // Parent: build a static list of all component ports
-    std::vector<uint16_t> all_ports;
-    for (auto* comp : this->components)
-        all_ports.push_back(comp->port());
-
-    // Assign peer ports to each component (for fanout)
-    for (auto* comp : this->components)
-        comp->set_peer_ports(all_ports);
 
     // Give the gateway the same peer list (so it can fanout)
     gateway->set_peer_ports(all_ports);
