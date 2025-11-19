@@ -307,12 +307,12 @@ public:
     // Helper to check if message comes from the VM's group
     bool is_message_internal(const Message& msg) const {
         if (msg.group_id == get_current_group()) {
-            printf("[CTRL] Ignoring control message from VM %d (group %d != local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
-            return false;
+            //printf("[CTRL] Ignoring control message from VM %d (group %d != local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
+            return true;
         }
         else {
-            printf("[CTRL] Accepting control message from VM %d (group %d == local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
-            return true;
+            //printf("[CTRL] Accepting control message from VM %d (group %d == local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
+            return false;
         }
     }
 
