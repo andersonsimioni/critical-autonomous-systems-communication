@@ -304,6 +304,18 @@ public:
         printf("[DEBUG] Group id set to %d (registered local vm %d)\n", current_group_id, my_vm);
     }
 
+    // Helper to check if message comes from the VM's group
+    bool is_message_internal(const Message& msg) const {
+        if (msg.group_id == get_current_group()) {
+            printf("[CTRL] Ignoring control message from VM %d (group %d != local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
+            return false;
+        }
+        else {
+            printf("[CTRL] Accepting control message from VM %d (group %d == local %d)\n", msg.orig_vm, msg.group_id, get_current_group());
+            return true;
+        }
+    }
+
     bool is_local_coordinator() const {
         return _is_master;
     }
@@ -463,9 +475,10 @@ public:
 
         
         // Sync logic for READY
-        if(ctrl == ControlType::READY && _sync_total_vms > 0) {
+        if(ctrl == ControlType::READY && is_message_internal(msg) && _sync_total_vms > 0) {
             // Track which nodes are ready
             _sync_ready_nodes.insert(c.from.mac.str());
+
             printf("[SYNC] READY received from %s, total ready: %zu/%d\n", c.from.mac.str().c_str(), _sync_ready_nodes.size(), _sync_total_vms);
 
             // If all nodes are ready, send GO (only if not already sent)
@@ -477,7 +490,7 @@ public:
         }
 
         // If GO received, notify owner
-        else if(ctrl == ControlType::GO) {
+        else if(ctrl == ControlType::GO && is_message_internal(msg)) {
             if(!_sync_go_received) {
                 printf("[SYNC] GO received from %s\n", c.from.mac.str().c_str());
                 _sync_go_received = true;   // prevent reacting multiple times
@@ -486,8 +499,7 @@ public:
         }
 
         // SYNC CLOCKS PROTOCOL:
-
-        else if(ctrl == ControlType::SYNC_REQ) {
+        else if(ctrl == ControlType::SYNC_REQ && is_message_internal(msg)) {
 
             if(_is_master) {
                 // Master received SYNC_REQ from worker
@@ -505,7 +517,7 @@ public:
             }
         }
 
-        else if(ctrl == ControlType::SYNC_RESP && !_is_master) {
+        else if(ctrl == ControlType::SYNC_RESP && is_message_internal(msg) && !_is_master) {
             // Worker received SYNC from master
             uint64_t t1 = 0;
             if(!msg.body.empty()) sscanf(msg.body.c_str(), "%lu", (unsigned long*)&t1);
@@ -523,7 +535,7 @@ public:
             //printf("[SYNC] Received SYNC_RESP from %s (t1=%llu), sending DELAY_REQ (t2=%llu, t3=%llu)\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3);
         }
 
-        else if(ctrl == ControlType::DELAY_REQ && _is_master) {
+        else if(ctrl == ControlType::DELAY_REQ && is_message_internal(msg) && _is_master) {
             uint64_t t1, t2, t3;
             if(sscanf(msg.body.c_str(), "%lu %lu %lu", (unsigned long*)&t1, (unsigned long*)&t2, (unsigned long*)&t3) != 3) return;
 
@@ -544,7 +556,7 @@ public:
             //printf("[SYNC] DELAY_REQ from %s (t1=%llu t2=%llu t3=%llu t4=%llu)\n offset=%lld microseconds rtt=%lld microseconds\n", c.from.mac.str().c_str(), (unsigned long long)t1, (unsigned long long)t2, (unsigned long long)t3, (unsigned long long)t4, (long long)offset, (long long)rtt);
         }
 
-        else if(ctrl == ControlType::DELAY_RESP && !_is_master) {
+        else if(ctrl == ControlType::DELAY_RESP && is_message_internal(msg) && !_is_master) {
             int64_t offset = 0;
             int64_t delay = 0;
             
