@@ -40,11 +40,6 @@ void* ShmNode::initialize_shared_memory_region()
     {
         memset(this->shared_data_ptr, 0, sizeof(SharedData));
         this->shared_data_ptr->parent_pid = getpid();
-
-        // ring buffer
- //       this->shared_data_ptr->head = 0;
- //       this->shared_data_ptr->tail = 0;
- //       this->shared_data_ptr->full = false;
     }
 
     return this->shared_data_ptr;
@@ -76,18 +71,6 @@ bool ShmNode::initialize_sync_controls()
     //printf("initializing all read done barrier with %i..\n", this->nodes_count+1);
     pthread_barrier_init(&this->shared_data_ptr->all_read_done_barrier, &this->shared_data_ptr->barrier_attr, this->nodes_count+1);
 
-    // initialize producer/consumer semaphores (shared between processes -> pshared = 1)
-    // sem_empty starts with MAX_MESSAGES (all slots free)
- //   if (sem_init(&this->shared_data_ptr->sem_empty, 1, MAX_MESSAGES) == -1) {
- //       perror("sem_init(sem_empty)");
-//     return false;
-//    }
-    // sem_full starts with 0 (no messages available)
-//    if (sem_init(&this->shared_data_ptr->sem_full, 1, 0) == -1) {
-//        perror("sem_init(sem_full)");
-//        return false;
-//    }
-
     return true;
 }
 
@@ -98,8 +81,6 @@ void* receive_msg_routine(void* args)
     //printf("read msg thread running..\n");
 
     while (true)
-
-
 
     {
 

@@ -10,7 +10,7 @@ KERNEL="bzImage"
 INITRD="initramfs.cpio"
 MCAST_ADDR="230.0.0.1"
 MCAST_PORT="1234"
-NUM_VMS=8
+NUM_VMS=12
 
 # Default timeout in seconds (0 = no timeout). Can be overridden by first numeric arg.
 TIMEOUT=0
@@ -67,7 +67,7 @@ trap cleanup EXIT INT TERM
 # List of VMs IDs: 0 1 2 10 11 12 20 21 22 30 31 32
 # 0,10,20,30 are coordinators
 
-for i in 0 1 10 11 20 21 30 31; do
+for i in 0 1 2 10 11 12 20 21 22 30 31 32; do
     MAC="52:54:00:12:34:$(printf "%02x" $i)"
     echo "[INFO] Starting VM $i with MAC $MAC, logging to $LOGDIR/vm_$i.log"
 
@@ -79,9 +79,7 @@ for i in 0 1 10 11 20 21 30 31; do
     # echo "[INFO] Starting VM $i (MAC=$MAC) → $PCAP_FILE"
 
     # number of car VMs (VMs 1..N)
-    # PROVISORIO
-    # TOTAL_CARS=$((NUM_VMS - 4))
-    TOTAL_CARS=$((1))
+    TOTAL_CARS=$((2))
 
     # Build qemu command arguments into an array for safer handling
     QEMU_CMD=(qemu-system-x86_64
