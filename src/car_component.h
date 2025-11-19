@@ -12,6 +12,7 @@
 #include <csignal>
 #include <unistd.h>
 #include <variant>
+#include <mutex>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -105,14 +106,46 @@ public:
     }
 
     // Parent forks; child runs the worker threads
-    virtual void initialize(bool is_master_node, int nodes_count) {
+    virtual void initialize(bool is_master_node, int nodes_count, int group_id) {
         printf("[CAR COMPONENT][%s] initializing..\n", this->name().c_str());
         initialize_communicator(is_master_node, nodes_count);
+        _vm_id = _local.mac.addr[5];
+        _assigned_group = _vm_id / 10;
+        _protocol->set_current_group(group_id);
         printf("[CAR COMPONENT][%s] initialized!\n", this->name().c_str());
       
         pthread_create(&_pubsub_thread, nullptr, pubsub_thread_entry, this);
 
         this->on_tick_loop();
+    }
+
+    void register_with_coordinator(bool is_master_node) {
+        if (is_master_node) return; // master doesn’t need to register itself
+
+        // Determine the coordinator for our current group
+        int coord_vm = _protocol->coordinator_for_group(_protocol->get_current_group());
+
+        // Build coordinator endpoint using same port as our control channel
+        Protocol<NIC>::Endpoint coordinator_ep = _protocol->endpoint_from_vm(coord_vm, _local.port);
+
+        // Send GROUP_REGISTER control message to coordinator
+        std::string payload = "VM_ID=" + std::to_string(_vm_id);
+        _protocol->send_control(_local, coordinator_ep, Protocol<NIC>::ControlType::GROUP_REGISTER, 0, payload);
+
+        printf("[SYNC][VM %d] Registration sent to coordinator %d\n", _vm_id, coord_vm);
+    }
+
+    void wait_for_ack_from_coordinator(bool is_master_node) {
+        if (is_master_node) return; // master doesn’t ack itself
+
+        std::unique_lock<std::mutex> lk(_sync_mtx);
+        _sync_cv.wait(lk, [this]{
+            return _protocol->get_current_group() == _assigned_group.load();
+        });
+        _assigned_group.store(_protocol->get_current_group());
+        _sync_cv.notify_all();
+
+        printf("[SYNC][VM %d] Registration ACK received from coordinator\n", _vm_id);
     }
 
     void set_peer_ports(const std::vector<uint16_t>& ports) {
@@ -183,17 +216,27 @@ public:
         return _comm->send(dst, static_cast<int>(_port), payload.data(), payload.size());
     }
 
-    void forward_message(const Rx& rx) {
+    void forward_message(const Rx& rx, int my_id) {
         auto fwd_msg = rx.msg;
-        fwd_msg.orig_vm   = _local.mac.addr[5];
+        fwd_msg.group_id  = _protocol->get_current_group();
+        fwd_msg.orig_vm   = my_id;
         fwd_msg.orig_port = _port;
+        uint64_t send_time = get_microseconds_now();
+        fwd_msg.timestamp = send_time;
         _comm->send_message(_to_bcast, fwd_msg);
     }
 
-    void fanout_message(const Rx& rx) {
+    void fanout_message(const Rx& rx, int my_id) {
+        auto fwd_msg = rx.msg;
+        fwd_msg.group_id  = _protocol->get_current_group();
+        fwd_msg.orig_vm   = my_id;
+        fwd_msg.orig_port = _port;
+        uint64_t send_time = -1;
         for (auto port : _peer_ports) {
             Protocol<NIC>::Endpoint dst { _my_mac, port };
-            _comm->send_message(dst, rx.msg);
+            send_time = get_microseconds_now();
+            fwd_msg.timestamp = send_time;
+            _comm->send_message(dst, fwd_msg);
         }
     }
 
@@ -272,7 +315,14 @@ protected:
 
 private:
     pid_t _pid{-1};              // child PID (owned by parent)
+
+    int8_t _vm_id{-1};
+    std::atomic<int> _assigned_group{-1};
+
     std::atomic<bool> _running{false}; // only used in child
+    std::mutex _sync_mtx;                   // mutex for sync wait
+    std::condition_variable _sync_cv;       // condition variable for sync
+    std::atomic<bool> _registered{false};   // true once coordinator ack received
 };
 
 #endif // CAR_COMPONENT_H

@@ -182,7 +182,7 @@ public:
         tv.tv_sec  = static_cast<time_t>(sec);
         tv.tv_usec = static_cast<suseconds_t>(usec);
 
-        printf("\n ---- VAI ALTERAR O RELOGIO ---\n");
+        //printf("\n ---- VAI ALTERAR O RELOGIO ---\n");
         if (settimeofday(&tv, nullptr) != 0) return false;
         //if (clock_settime(CLOCK_REALTIME, (const struct timespec*)&tv) != 0) return false;
 
@@ -226,31 +226,7 @@ public:
         return true;
     }
 
-    //Apply sync - 
-    // Try to set the system clock using our best offset guess
-    //bool applySync() const {
-    //    long long corrected_time_us = getSynchronizedTimeUs();
-
-        // Convert to seconds + microseconds
-        //struct timeval tv;
-        //tv.tv_sec = static_cast<time_t>(corrected_time_us / (long long)(1000 * 1000));
-        //tv.tv_usec = static_cast<suseconds_t>(fmod(corrected_time_us, (long long)(1000 * 1000)));
-
-        // Ask the system to change the clock, must execute as ROOT
-    //    int result = adjust_system_time_by_us(corrected_time_us); //settimeofday(&tv, nullptr);
-
-     //   if(result != 0) 
-    //    {
-    //        std::perror("settimeofday failed");
-    //        return false;
-     //   }
-
-        //printf("[SYNC] system clock adjusted by offset %lld us\n", avg_offset);
-     //   return true;
-   // }
-
-
-     void printStatus() const {
+    void printStatus() const {
         printf("\n ---- Clock Syncer Infos ---\n");
         printf("samples: %zu\n", std::max(rtt_samples.size(), offset_samples.size()));
         printf("avg rtt: %lld us\n", avg_rtt);

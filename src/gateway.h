@@ -27,12 +27,15 @@ public:
     Gateway(uint16_t port, int vm_id, int total_sync_vms, bool is_sync_master = false)
         : Base(port, "Gateway"), _port(port), _vm_id(vm_id), _total_sync_vms(total_sync_vms), _sync_master(is_sync_master), _sync_done(false) {}
 
-    virtual void initialize(bool is_master_node, int total_nodes) override
+    virtual void initialize(bool is_master_node, int total_nodes, int group_id) override
     {
         printf("[CAR COMPONENT][%s] initializing.. (VM %d%s)\n", this->name().c_str(), _vm_id, _sync_master ? " MASTER" : "");
 
         // Initialize communicators and protocol
         this->initialize_communicator(true, total_nodes);
+        _protocol->set_current_group(group_id);
+        this->register_with_coordinator(is_master_node); // broadcast group registration
+        this->wait_for_ack_from_coordinator(is_master_node);
 
         // Enable protocol-level sync passing a lambda for GO arrival
         _comm->set_on_sync_done([this]() {this->notify_sync_done();});
@@ -75,16 +78,30 @@ protected:
         
         if(rx.origin == ChannelOrigin::SharedMemory) {
             // Message from a local component: forward to other cars
-            Base::forward_message(rx);
+            Base::forward_message(rx, _vm_id);
         }
         else if(rx.origin == ChannelOrigin::Ethernet) {
             // Message from another car: deliver to local components
-            Base::fanout_message(rx);
+            Base::fanout_message(rx, _vm_id);
         }
     }
 
     void on_tick() override {
+
+        std::string msg = "PING";
         uint64_t now_us = get_microseconds_now(); // wall-clock timestamp in microseconds
+
+        Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // endpoint for group coordinator, only it will respond
+
+        // GROUP MOVE REQUEST - for testing at the moment
+        static bool did_request = false;
+        int new_group = 3;
+        if(_vm_id == 1 && !did_request) {
+            printf("[DEBUG] VM %d requesting to move to group %d.\n", _vm_id, new_group);
+            _protocol->move_group(new_group);
+            did_request = true;
+            printf("[DEBUG] VM %d requested to move to group %d.\n", _vm_id, new_group);
+        } 
 
         // SYNC REQUEST every 3 seconds
         if (!_sync_master) {
@@ -99,19 +116,18 @@ protected:
                     _protocol->set_probabilistic_ptp_timeout(false);
                     _last_sync_request_us.store(now_us);
 
-                    Endpoint master_endpoint{Ethernet::Address::BROADCAST(), _local.port}; // broadcasting for now, only the master will respond
                     //printf("[SYNC][VM %d] Sending SYNC_REQ to master\n", _vm_id);
+
                     _protocol->send_control(_local, master_endpoint, Protocol<TNIC>::ControlType::SYNC_REQ);
                 }
-                
-
             }
-        }
+        }      
     }
 
 private:
     uint16_t _port;
-    int _vm_id;                                             // VM identity
+    int _group_id{0};                                       // VM group 
+    int _vm_id{0};                                          // VM identity
     int _total_sync_vms;                                    // number of VMs to wait for at the barrier
     bool _sync_master;                                      // true if this Gateway coordinates READY/GO and SYNC
     std::atomic<bool> _sync_done;                           // flag for passing the initialization barrier

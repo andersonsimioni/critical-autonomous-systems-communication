@@ -34,7 +34,6 @@ public:
         typename Protocol<TNIC>::Endpoint from;
         typename Protocol<TNIC>::Endpoint to;
         ChannelOrigin origin;
-        uint64_t ReceiveTimeStampUs;
     };
 
     Communicator(ProtocolT* protocol, const Endpoint& local): _protocol(protocol), _local(local)
@@ -79,7 +78,7 @@ public:
         uint64_t send_time = get_microseconds_now();
         uint64_t id = _next_msg_id.fetch_add(1);
         uint8_t vm_id = _local.mac.addr[5];  // last byte of MAC
-        uint8_t group_id = _protocol->get_current_group_id();
+        uint8_t group_id = _protocol->get_current_group();
 
         // Construct Protocol::Message
         typename ProtocolT::Message msg;
@@ -91,12 +90,15 @@ public:
         msg.msg_id = id;
         msg.body = std::string(reinterpret_cast<const char*>(data), len);
 
+
         // Serialize using Protocol::build_message
         std::string payload = _protocol->build_message(msg);
 
+        unsigned size = static_cast<unsigned>(payload.size());
+
         // Log send
         logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
-
+    
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
 
@@ -106,7 +108,7 @@ public:
 
     // send a full Protocol::Message (preserves msg_id, timestamp, type, body)
     int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
-        std::string payload = _protocol->build_message(msg);
+        std::string payload = _protocol->build_message(msg);     
         
         logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 
@@ -159,6 +161,7 @@ private:
             int type = msg.type;
             uint64_t id = msg.msg_id;
 
+
             _owner->logf("[RECV GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, src_port, recv_time, type, id);
 
             // Deliver to Rx
@@ -167,7 +170,6 @@ private:
             rx.from = from;
             rx.to = to;
             rx.origin = origin_of_packet;
-            rx.ReceiveTimeStampUs = recv_time;
 
             Communicator::Rx rx_copy = rx;     // copy before moving
             _owner->enqueue(std::move(rx));    // queue consumes the original
