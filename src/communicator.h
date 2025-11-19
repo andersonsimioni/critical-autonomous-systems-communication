@@ -98,8 +98,7 @@ public:
 
         // Log send
         logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", group_id, vm_id, _local.port, send_time, type, id);
-        logf("[SEND total_size = %u]", size);
-
+    
         return _protocol->send(_local, to, reinterpret_cast<const uint8_t*>(payload.data()), static_cast<unsigned>(payload.size()));
     }
 
@@ -109,17 +108,7 @@ public:
 
     // send a full Protocol::Message (preserves msg_id, timestamp, type, body)
     int send_message(const Endpoint& to, const typename ProtocolT::Message& msg) {
-        std::string payload = _protocol->build_message(msg);
-
-        // size_t total_size =
-        //     sizeof(msg.group_id) +
-        //     sizeof(msg.orig_vm) +
-        //     sizeof(msg.orig_port) +
-        //     sizeof(msg.timestamp) +
-        //     sizeof(msg.type) +
-        //     sizeof(msg.msg_id) +
-        //     msg.body.size() +          
-        //     sizeof(msg.control);       
+        std::string payload = _protocol->build_message(msg);     
         
         logf("[SEND GROUP=%d VM=%d PORT=%d TIME=%lu TYPE=%d ID=%lu]\n", msg.group_id, msg.orig_vm, msg.orig_port, msg.timestamp, msg.type, msg.msg_id);
 

@@ -216,7 +216,7 @@ public:
     bool verify_msgac (uint8_t my_msgac, const char* buf ){
 
         uint8_t expected = generate_mac(buf);
-        printf("[DEBUG AUTH] verify : expected %d and my mac %d \n" , expected, my_msgac);
+        //printf("[DEBUG AUTH] verify : expected %d and my mac %d \n" , expected, my_msgac);
         return expected == my_msgac;
 
     }
@@ -441,10 +441,9 @@ public:
             bool verify_msgac = this->verify_msgac(msg.msgac, msg.body.c_str());
             if (!verify_msgac)
             {
-                printf("[AUTH] Unauthorized control message! \n");
+                //printf("[AUTH] Unauthorized control message! \n");
                 return;
             }
-            else { printf("[AUTH] Authorized control! \n"); }
         }
 
         // Remove trailing nulls only (if any)
@@ -497,7 +496,6 @@ public:
                 char buf[128];
                 snprintf(buf, sizeof(buf), "%lu", (unsigned long)t1);
 
-                // PROVISORIO
                 uint8_t msgac = generate_mac(buf);
 
                 // Send SYNC_RESP with timestamp t1
@@ -518,7 +516,6 @@ public:
             char buf[256];
             snprintf(buf, sizeof(buf), "%lu %lu %lu", (unsigned long)t1, (unsigned long)t2, (unsigned long)t3);
 
-            // PROVISORIO
             uint8_t msgac = generate_mac(buf);
             
             send_control(_control_local, c.from, ControlType::DELAY_REQ, msgac, buf);
@@ -540,7 +537,6 @@ public:
             char buf[128];
             snprintf(buf, sizeof(buf), "%ld %ld", (long)offset, (long)rtt);
 
-            // PROVISORIO
             uint8_t msgac = generate_mac(buf);
 
             send_control(_control_local, c.from, ControlType::DELAY_RESP, msgac, buf);
@@ -553,28 +549,28 @@ public:
             int64_t delay = 0;
             
             sscanf(msg.body.c_str(), "%lld %lld", (long long*)&offset, (long long*)&delay);
-            printf("Clock Syncer Collecting Sample offset=%ld delay=%ld, adding samples\n", offset, delay);
+            //printf("Clock Syncer Collecting Sample offset=%ld delay=%ld, adding samples\n", offset, delay);
 
             _clock_syncer->addPtpSample(offset, delay);
-            printf("samples added!\n");
+            //printf("samples added!\n");
 
             auto sync_over_time = this->get_probabilistic_ptp_timeout();
             auto enough_samples = _clock_syncer->hasEnoughSamplesCI(100, 1.96); //+-50us with 95% confidence
-            printf("calculate overtime or enough samples with success!\n");
+            //printf("calculate overtime or enough samples with success!\n");
 
             if(true) 
             {
-                printf("[SYNC] applying sync..\n");
-                if(_clock_syncer->applySync()) printf("[SYNC] sync applyed with success!\n");
+                //printf("[SYNC] applying sync..\n");
+                _clock_syncer->applySync();//printf("[SYNC] sync applyed with success!\n");
                 set_running_ptp(false);
                 
                 //std::exit(EXIT_FAILURE);
             }
             else
             {
-                printf("Protocol Asking other PTP step..\n");
+                //printf("Protocol Asking other PTP step..\n");
                 send_control(_control_local, c.from, Protocol<TNIC>::ControlType::SYNC_REQ);
-                printf("Protocol Asked PTP step with success!\n");
+                //printf("Protocol Asked PTP step with success!\n");
             }
 
             //printf("[SYNC] DELAY_RESP received from master %s (offset=%lld)\n", c.from.mac.str().c_str(), (long long)offset);
@@ -656,7 +652,7 @@ public:
                 std::istringstream iss(msg.body);
                 iss >> vm_id >> old_gid >> new_gid;
                 if (iss.fail()) {
-                    printf("[GROUP] Bad MOVE_NOTIFY body: '%s'\n", msg.body.c_str());
+                    //printf("[GROUP] Bad MOVE_NOTIFY body: '%s'\n", msg.body.c_str());
                     return;
                 }
             }
@@ -667,7 +663,7 @@ public:
 
             if (!am_coordinator) {
                 // Cars and non-coordinator RSUs ignore, but log for debugging.
-                printf("[GROUP] Ignoring GROUP_MOVE_NOTIFY at VM %d (not a coordinator)\n", my_vm);
+                //printf("[GROUP] Ignoring GROUP_MOVE_NOTIFY at VM %d (not a coordinator)\n", my_vm);
                 return;
             }
 
@@ -683,7 +679,7 @@ public:
                 _groups[new_gid].members.insert(vm_id);
             }
 
-            printf("[GROUP] Coordinator VM %d updated MOVE_NOTIFY: VM %d moved %d -> %d\n", my_vm, vm_id, old_gid, new_gid);
+            //printf("[GROUP] Coordinator VM %d updated MOVE_NOTIFY: VM %d moved %d -> %d\n", my_vm, vm_id, old_gid, new_gid);
         }
 
         else if (ctrl == ControlType::GROUP_ASSIGN) {
@@ -691,7 +687,7 @@ public:
             try {
                 target_gid = std::stoi(msg.body);
             } catch (...) {
-                printf("[GROUP] Bad GROUP_ASSIGN body: '%s'\n", msg.body.c_str());
+                //printf("[GROUP] Bad GROUP_ASSIGN body: '%s'\n", msg.body.c_str());
                 return;
             }
 
@@ -701,7 +697,7 @@ public:
             // Only the VM that receives this message updates its own current_group_id.
             set_current_group(target_gid);
 
-            printf("[GROUP] VM %d assigned to group %d\n", my_vm, target_gid);
+            //printf("[GROUP] VM %d assigned to group %d\n", my_vm, target_gid);
         }
 
         else if (ctrl == ControlType::GROUP_REGISTER) {
@@ -719,7 +715,7 @@ public:
 
             if(my_vm != coord_vm) {
                 // Not the coordinator for this group → ignore
-                printf("[GROUP] GROUP_REGISTER received from VM %d, ignored (coord=%d, me=%d)\n", sender_vm, coord_vm, my_vm);
+                //printf("[GROUP] GROUP_REGISTER received from VM %d, ignored (coord=%d, me=%d)\n", sender_vm, coord_vm, my_vm);
                 return;
             }
 
@@ -730,7 +726,7 @@ public:
                 _groups[target_gid].members.insert(sender_vm);
             }
 
-            printf("[GROUP] Coordinator VM %d registered VM %d in group %d\n", my_vm, sender_vm, target_gid);
+            //printf("[GROUP] Coordinator VM %d registered VM %d in group %d\n", my_vm, sender_vm, target_gid);
 
             // Send back GROUP_ASSIGN to the registering VM so it knows its group
             Endpoint sender_ep = endpoint_from_vm(sender_vm, _control_local.port);
@@ -752,9 +748,9 @@ public:
                 if (ctrl == ControlType::GROUP_REGISTER || ctrl == ControlType::GROUP_ASSIGN || am_coord || sender_same_group)
                 {
                     po->on_control(ctrl, c.from, c.to);
-                } else {
-                    printf("[CTRL] Dropping control from vm %d (sender_gid=%d) at vm_gid=%d (non-coord)\n", sender_vm, sender_gid ? *sender_gid : -1, current_group_id);
-                }
+                } //else {
+                    //printf("[CTRL] Dropping control from vm %d (sender_gid=%d) at vm_gid=%d (non-coord)\n", sender_vm, sender_gid ? *sender_gid : -1, current_group_id);
+                //}
                 continue;
             }
 
@@ -763,7 +759,7 @@ public:
             int local_gid  = current_group_id;
 
             if (sender_gid == -1 || sender_gid != local_gid) {
-                printf("Dropped data msg from group %d (local %d)\n", sender_gid, local_gid);
+                //printf("Dropped data msg from group %d (local %d)\n", sender_gid, local_gid);
                 continue;
             }
 
