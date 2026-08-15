@@ -1,4 +1,4 @@
-# SO2 Project
+# Comunicação de sistemas autonomos críticos
 
 This is some C++ thing for talking between virtual machines like cars, so we will simulate cars changing information.  
 We using raw sockets and some custom protocol stuff. 
